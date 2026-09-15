@@ -1,0 +1,16 @@
+{
+  "name": "hivestream",
+  "private": true,
+  "type": "module",
+  "description": "HiveStream-owned TypeScript domain layer (identity, storage-policy, scheduler). CyTube/product UI code stays plain JS per LLM-HANDOFF.md.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsc && node --test dist/tests/identity/*.test.js",
+    "build": "tsc && esbuild src/identity/index.ts --bundle --format=esm --outfile=dist/identity.bundle.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.7.0"
+  }
+}
