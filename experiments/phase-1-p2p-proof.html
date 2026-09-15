@@ -30,10 +30,11 @@
     body { margin:0; padding:16px; background:#111; color:#eee; }
     main { max-width:900px; margin:auto; }
     label { display:block; margin-top:12px; font-weight:700; }
-    input,button { box-sizing:border-box; width:100%; margin-top:6px; padding:10px; border:1px solid #555; border-radius:6px; background:#1c1c1c; color:#eee; font:inherit; }
+    input,button,textarea { box-sizing:border-box; width:100%; margin-top:6px; padding:10px; border:1px solid #555; border-radius:6px; background:#1c1c1c; color:#eee; font:inherit; }
     button { cursor:pointer; font-weight:700; }
     video { width:100%; max-height:60vh; margin-top:16px; background:#000; }
     pre { white-space:pre-wrap; overflow-wrap:anywhere; background:#080808; border:1px solid #333; padding:12px; border-radius:6px; line-height:1.35; }
+    #jsonExport { min-height:240px; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; resize:vertical; }
   </style>
 </head>
 <body>
@@ -57,6 +58,10 @@
 
   <h2>Event Log</h2>
   <pre id="log"></pre>
+
+  <h2>JSON Export</h2>
+  <p id="copyStatus">The JSON is also placed in the box below. If the Copy button is blocked by the browser, tap inside the box, use Select All, then Copy.</p>
+  <textarea id="jsonExport" readonly spellcheck="false" aria-label="JSON test results"></textarea>
 </main>
 
 <script>
@@ -75,6 +80,8 @@
   var copyButton = document.getElementById("copyButton");
   var statusEl = document.getElementById("status");
   var logEl = document.getElementById("log");
+  var jsonExport = document.getElementById("jsonExport");
+  var copyStatus = document.getElementById("copyStatus");
   var hls = null;
   var startedAt = null;
 
@@ -161,6 +168,7 @@
       "Segments via P2P:     "+result.segments.p2p+"\n"+
       "Playback state:       "+result.playback.state+"\n"+
       "Swarm ID:             "+result.configuration.swarmId;
+    jsonExport.value=JSON.stringify(result,null,2);
   }
 
   function bindVideo() {
@@ -262,16 +270,30 @@
 
   startButton.addEventListener("click",function(){
     try { start(); }
-    catch(e) { log("START ERROR",{message:e.message,stack:e.stack||null}); statusEl.textContent="START ERROR: "+e.message; }
+    catch(e) { log("START ERROR",{message:e.message,stack:e.stack||null}); statusEl.textContent="START ERROR: "+e.message; render(); }
   });
 
   copyButton.addEventListener("click",function(){
     render();
-    var text=JSON.stringify(result,null,2);
+    var text=jsonExport.value;
+    function copied() {
+      copyStatus.textContent="JSON copied to clipboard.";
+      log("JSON COPIED");
+    }
+    function fallback() {
+      jsonExport.focus();
+      jsonExport.select();
+      try {
+        var ok=document.execCommand("copy");
+        if(ok) { copied(); return; }
+      } catch(e) {}
+      copyStatus.textContent="Clipboard access was blocked. The JSON is selected below — use your browser's Copy command.";
+      log("CLIPBOARD FAILED — JSON SELECTED FOR MANUAL COPY");
+    }
     if(navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function(){log("JSON COPIED");},function(){log("CLIPBOARD FAILED");});
+      navigator.clipboard.writeText(text).then(copied).catch(fallback);
     } else {
-      var ta=document.createElement("textarea"); ta.value=text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); log("JSON COPIED");
+      fallback();
     }
   });
 })();
