@@ -1,0 +1,5 @@
+This is a test file created by Claude to confirm Google Drive write access works.
+
+Timestamp: 2026-09-05
+Created via: Claude.ai Google Drive connector (create_file tool)
+Purpose: Verify write capability before trusting it for CyTube knowledge repo work.
