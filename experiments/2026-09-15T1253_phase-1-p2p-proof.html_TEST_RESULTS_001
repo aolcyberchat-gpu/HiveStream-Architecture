@@ -1,0 +1,731 @@
+### start ###
+
+### the human developer created and uploaded this file ###
+
+### laptop test from local file (file:///C:/Users/[USERNAME]/Downloads/phase-1-p2p-proof.html) form three different desktop browsers all running on the same win11 laptop at roughly the same time. the win11 laptop was connected to home residential DSL via a WiFi router, the three desktop browser were connected to the same home residential DSL WiFi network. ###
+{
+  "test": {
+    "name": "HiveStream Phase 1B — Actual P2P Media Proof",
+    "version": 2,
+    "startedAt": "2026-09-15T19:37:40.426Z",
+    "elapsedMs": 475727,
+    "authorship": "William von Meister (Project Owner) + GPT-5.6 Luna / LUNA-HS-001 (AI Collaborator)"
+  },
+  "dependencies": {
+    "hlsJs": "1.7.0",
+    "p2pMediaLoaderHlsJs": "4.0.0"
+  },
+  "environment": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36 Edg/153.0.0.0",
+    "platform": "Win32",
+    "webRtcSupported": true,
+    "hlsSupported": true
+  },
+  "configuration": {
+    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "swarmId": "hivestream-phase1-proof-v1"
+  },
+  "peers": {
+    "connected": 9,
+    "closed": 9,
+    "current": [],
+    "events": [
+      {
+        "time": "2026-09-15T19:38:05.359Z",
+        "type": "connect",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      },
+      {
+        "time": "2026-09-15T19:38:36.527Z",
+        "type": "close",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      },
+      {
+        "time": "2026-09-15T19:39:08.797Z",
+        "type": "connect",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      },
+      {
+        "time": "2026-09-15T19:39:33.576Z",
+        "type": "connect",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      },
+      {
+        "time": "2026-09-15T19:39:49.039Z",
+        "type": "close",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      },
+      {
+        "time": "2026-09-15T19:40:00.460Z",
+        "type": "connect",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      },
+      {
+        "time": "2026-09-15T19:40:01.707Z",
+        "type": "close",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      },
+      {
+        "time": "2026-09-15T19:40:42.173Z",
+        "type": "connect",
+        "peerId": "-PM0400-eLiJrKgTzJCy"
+      },
+      {
+        "time": "2026-09-15T19:40:44.499Z",
+        "type": "connect",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      },
+      {
+        "time": "2026-09-15T19:40:51.810Z",
+        "type": "connect",
+        "peerId": "-PM0400-UIIIqj2O2swm"
+      },
+      {
+        "time": "2026-09-15T19:41:03.450Z",
+        "type": "close",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      },
+      {
+        "time": "2026-09-15T19:41:27.961Z",
+        "type": "close",
+        "peerId": "-PM0400-eLiJrKgTzJCy"
+      },
+      {
+        "time": "2026-09-15T19:41:27.962Z",
+        "type": "close",
+        "peerId": "-PM0400-UIIIqj2O2swm"
+      },
+      {
+        "time": "2026-09-15T19:41:39.812Z",
+        "type": "close",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      },
+      {
+        "time": "2026-09-15T19:41:50.946Z",
+        "type": "connect",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      },
+      {
+        "time": "2026-09-15T19:42:39.797Z",
+        "type": "close",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      },
+      {
+        "time": "2026-09-15T19:42:50.629Z",
+        "type": "connect",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      },
+      {
+        "time": "2026-09-15T19:44:09.713Z",
+        "type": "close",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      }
+    ]
+  },
+  "bytes": {
+    "httpDownloaded": 65701619,
+    "p2pDownloaded": 18567478,
+    "otherDownloaded": 0,
+    "p2pUploaded": 34059960,
+    "downloadEvents": 4555,
+    "uploadEvents": 536
+  },
+  "segments": {
+    "loaded": 0,
+    "p2p": 0,
+    "http": 0,
+    "unknownSource": 0,
+    "ids": []
+  },
+  "playback": {
+    "state": "playing",
+    "currentTime": 450.399668,
+    "duration": 634.634,
+    "error": null
+  },
+  "verdict": {
+    "peerConnected": true,
+    "p2pBytesReceived": true,
+    "p2pBytesUploaded": true,
+    "p2pSegmentLoaded": false,
+    "proof": true
+  }
+}
+
+{
+  "test": {
+    "name": "HiveStream Phase 1B — Actual P2P Media Proof",
+    "version": 2,
+    "startedAt": "2026-09-15T19:36:28.811Z",
+    "elapsedMs": 565220,
+    "authorship": "William von Meister (Project Owner) + GPT-5.6 Luna / LUNA-HS-001 (AI Collaborator)"
+  },
+  "dependencies": {
+    "hlsJs": "1.7.0",
+    "p2pMediaLoaderHlsJs": "4.0.0"
+  },
+  "environment": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:155.0) Gecko/20100101 Firefox/155.0",
+    "platform": "Win32",
+    "webRtcSupported": true,
+    "hlsSupported": true
+  },
+  "configuration": {
+    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "swarmId": "hivestream-phase1-proof-v1"
+  },
+  "peers": {
+    "connected": 10,
+    "closed": 9,
+    "current": [
+      "-PM0400-eLiJrKgTzJCy"
+    ],
+    "events": [
+      {
+        "time": "2026-09-15T19:38:05.359Z",
+        "type": "connect",
+        "peerId": "-PM0400-Ho5gvpjYBGFW"
+      },
+      {
+        "time": "2026-09-15T19:38:36.531Z",
+        "type": "close",
+        "peerId": "-PM0400-Ho5gvpjYBGFW"
+      },
+      {
+        "time": "2026-09-15T19:38:54.661Z",
+        "type": "connect",
+        "peerId": "-PM0400-UIIIqj2O2swm"
+      },
+      {
+        "time": "2026-09-15T19:39:08.800Z",
+        "type": "connect",
+        "peerId": "-PM0400-Ho5gvpjYBGFW"
+      },
+      {
+        "time": "2026-09-15T19:39:21.943Z",
+        "type": "connect",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      },
+      {
+        "time": "2026-09-15T19:39:24.097Z",
+        "type": "close",
+        "peerId": "-PM0400-UIIIqj2O2swm"
+      },
+      {
+        "time": "2026-09-15T19:39:26.353Z",
+        "type": "close",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      },
+      {
+        "time": "2026-09-15T19:39:33.577Z",
+        "type": "connect",
+        "peerId": "-PM0400-Ho5gvpjYBGFW"
+      },
+      {
+        "time": "2026-09-15T19:39:49.037Z",
+        "type": "close",
+        "peerId": "-PM0400-Ho5gvpjYBGFW"
+      },
+      {
+        "time": "2026-09-15T19:40:00.461Z",
+        "type": "connect",
+        "peerId": "-PM0400-Ho5gvpjYBGFW"
+      },
+      {
+        "time": "2026-09-15T19:40:01.707Z",
+        "type": "close",
+        "peerId": "-PM0400-Ho5gvpjYBGFW"
+      },
+      {
+        "time": "2026-09-15T19:40:42.314Z",
+        "type": "connect",
+        "peerId": "-PM0400-UIIIqj2O2swm"
+      },
+      {
+        "time": "2026-09-15T19:40:53.783Z",
+        "type": "close",
+        "peerId": "-PM0400-UIIIqj2O2swm"
+      },
+      {
+        "time": "2026-09-15T19:41:39.811Z",
+        "type": "close",
+        "peerId": "-PM0400-Ho5gvpjYBGFW"
+      },
+      {
+        "time": "2026-09-15T19:41:50.947Z",
+        "type": "connect",
+        "peerId": "-PM0400-Ho5gvpjYBGFW"
+      },
+      {
+        "time": "2026-09-15T19:42:39.795Z",
+        "type": "close",
+        "peerId": "-PM0400-Ho5gvpjYBGFW"
+      },
+      {
+        "time": "2026-09-15T19:42:50.631Z",
+        "type": "connect",
+        "peerId": "-PM0400-Ho5gvpjYBGFW"
+      },
+      {
+        "time": "2026-09-15T19:43:40.426Z",
+        "type": "connect",
+        "peerId": "-PM0400-eLiJrKgTzJCy"
+      },
+      {
+        "time": "2026-09-15T19:44:09.712Z",
+        "type": "close",
+        "peerId": "-PM0400-Ho5gvpjYBGFW"
+      }
+    ]
+  },
+  "bytes": {
+    "httpDownloaded": 154628384,
+    "p2pDownloaded": 34191030,
+    "otherDownloaded": 0,
+    "p2pUploaded": 65813749,
+    "downloadEvents": 9543,
+    "uploadEvents": 1021
+  },
+  "segments": {
+    "loaded": 0,
+    "p2p": 0,
+    "http": 0,
+    "unknownSource": 0,
+    "ids": []
+  },
+  "playback": {
+    "state": "playing",
+    "currentTime": 465.940566,
+    "duration": 634.634,
+    "error": null
+  },
+  "verdict": {
+    "peerConnected": true,
+    "p2pBytesReceived": true,
+    "p2pBytesUploaded": true,
+    "p2pSegmentLoaded": false,
+    "proof": true
+  }
+}
+
+{
+  "test": {
+    "name": "HiveStream Phase 1B — Actual P2P Media Proof",
+    "version": 2,
+    "startedAt": "2026-09-15T19:36:54.253Z",
+    "elapsedMs": 559914,
+    "authorship": "William von Meister (Project Owner) + GPT-5.6 Luna / LUNA-HS-001 (AI Collaborator)"
+  },
+  "dependencies": {
+    "hlsJs": "1.7.0",
+    "p2pMediaLoaderHlsJs": "4.0.0"
+  },
+  "environment": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+    "platform": "Win32",
+    "webRtcSupported": true,
+    "hlsSupported": true
+  },
+  "configuration": {
+    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "swarmId": "hivestream-phase1-proof-v1"
+  },
+  "peers": {
+    "connected": 7,
+    "closed": 6,
+    "current": [
+      "-PM0400-9MTDSL2drdEJ"
+    ],
+    "events": [
+      {
+        "time": "2026-09-15T19:39:22.377Z",
+        "type": "connect",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      },
+      {
+        "time": "2026-09-15T19:39:50.372Z",
+        "type": "close",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      },
+      {
+        "time": "2026-09-15T19:40:07.962Z",
+        "type": "connect",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      },
+      {
+        "time": "2026-09-15T19:40:19.917Z",
+        "type": "close",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      },
+      {
+        "time": "2026-09-15T19:40:35.022Z",
+        "type": "connect",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      },
+      {
+        "time": "2026-09-15T19:40:41.064Z",
+        "type": "close",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      },
+      {
+        "time": "2026-09-15T19:40:42.174Z",
+        "type": "connect",
+        "peerId": "-PM0400-Ho5gvpjYBGFW"
+      },
+      {
+        "time": "2026-09-15T19:40:51.808Z",
+        "type": "connect",
+        "peerId": "-PM0400-UIIIqj2O2swm"
+      },
+      {
+        "time": "2026-09-15T19:40:57.855Z",
+        "type": "close",
+        "peerId": "-PM0400-UIIIqj2O2swm"
+      },
+      {
+        "time": "2026-09-15T19:40:59.127Z",
+        "type": "connect",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      },
+      {
+        "time": "2026-09-15T19:41:03.451Z",
+        "type": "close",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      },
+      {
+        "time": "2026-09-15T19:41:27.963Z",
+        "type": "close",
+        "peerId": "-PM0400-Ho5gvpjYBGFW"
+      },
+      {
+        "time": "2026-09-15T19:43:40.425Z",
+        "type": "connect",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      }
+    ]
+  },
+  "bytes": {
+    "httpDownloaded": 76657994,
+    "p2pDownloaded": 47246271,
+    "otherDownloaded": 0,
+    "p2pUploaded": 0,
+    "downloadEvents": 6339,
+    "uploadEvents": 0
+  },
+  "segments": {
+    "loaded": 0,
+    "p2p": 0,
+    "http": 0,
+    "unknownSource": 0,
+    "ids": []
+  },
+  "playback": {
+    "state": "canplay",
+    "currentTime": 0,
+    "duration": 634.584,
+    "error": null
+  },
+  "verdict": {
+    "peerConnected": true,
+    "p2pBytesReceived": true,
+    "p2pBytesUploaded": false,
+    "p2pSegmentLoaded": false,
+    "proof": true
+  }
+}
+
+### mobile andriod phone test results. note, I ran the mobile andriod phone test using the phones mobile network carrier, which is Verizon cellular 5g (Verizon 5g is an order of magnitude faster then my residential DSL Internet connection). the test was also from local file. I ran the mobile test a little after the laptop on at least 2 browsers at roughly the same time ###
+
+{
+  "test": {
+    "name": "HiveStream Phase 1B — Actual P2P Media Proof",
+    "version": 2,
+    "startedAt": "2026-09-15T19:39:21.012Z",
+    "elapsedMs": 238274,
+    "authorship": "William von Meister (Project Owner) + GPT-5.6 Luna / LUNA-HS-001 (AI Collaborator)"
+  },
+  "dependencies": {
+    "hlsJs": "1.7.0",
+    "p2pMediaLoaderHlsJs": "4.0.0"
+  },
+  "environment": {
+    "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36",
+    "platform": "Linux armv81",
+    "webRtcSupported": true,
+    "hlsSupported": true
+  },
+  "configuration": {
+    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "swarmId": "hivestream-phase1-proof-v1"
+  },
+  "peers": {
+    "connected": 10,
+    "closed": 9,
+    "current": [
+      "-PM0400-UIIIqj2O2swm"
+    ],
+    "events": [
+      {
+        "time": "2026-09-15T19:39:22.837Z",
+        "type": "connect",
+        "peerId": "-PM0400-UIIIqj2O2swm"
+      },
+      {
+        "time": "2026-09-15T19:39:22.844Z",
+        "type": "connect",
+        "peerId": "-PM0400-UIIIqj2O2swm"
+      },
+      {
+        "time": "2026-09-15T19:39:23.462Z",
+        "type": "connect",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      },
+      {
+        "time": "2026-09-15T19:39:23.872Z",
+        "type": "connect",
+        "peerId": "-PM0400-eLiJrKgTzJCy"
+      },
+      {
+        "time": "2026-09-15T19:39:25.544Z",
+        "type": "close",
+        "peerId": "-PM0400-UIIIqj2O2swm"
+      },
+      {
+        "time": "2026-09-15T19:39:28.033Z",
+        "type": "close",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      },
+      {
+        "time": "2026-09-15T19:39:51.906Z",
+        "type": "close",
+        "peerId": "-PM0400-eLiJrKgTzJCy"
+      },
+      {
+        "time": "2026-09-15T19:40:09.476Z",
+        "type": "connect",
+        "peerId": "-PM0400-eLiJrKgTzJCy"
+      },
+      {
+        "time": "2026-09-15T19:40:21.571Z",
+        "type": "close",
+        "peerId": "-PM0400-eLiJrKgTzJCy"
+      },
+      {
+        "time": "2026-09-15T19:40:36.496Z",
+        "type": "connect",
+        "peerId": "-PM0400-eLiJrKgTzJCy"
+      },
+      {
+        "time": "2026-09-15T19:40:42.736Z",
+        "type": "close",
+        "peerId": "-PM0400-eLiJrKgTzJCy"
+      },
+      {
+        "time": "2026-09-15T19:40:46.205Z",
+        "type": "connect",
+        "peerId": "-PM0400-Ho5gvpjYBGFW"
+      },
+      {
+        "time": "2026-09-15T19:40:51.904Z",
+        "type": "connect",
+        "peerId": "-PM0400-UIIIqj2O2swm"
+      },
+      {
+        "time": "2026-09-15T19:41:00.868Z",
+        "type": "connect",
+        "peerId": "-PM0400-eLiJrKgTzJCy"
+      },
+      {
+        "time": "2026-09-15T19:41:05.016Z",
+        "type": "close",
+        "peerId": "-PM0400-Ho5gvpjYBGFW"
+      },
+      {
+        "time": "2026-09-15T19:41:05.020Z",
+        "type": "close",
+        "peerId": "-PM0400-UIIIqj2O2swm"
+      },
+      {
+        "time": "2026-09-15T19:41:05.022Z",
+        "type": "close",
+        "peerId": "-PM0400-eLiJrKgTzJCy"
+      },
+      {
+        "time": "2026-09-15T19:41:11.257Z",
+        "type": "close",
+        "peerId": "-PM0400-UIIIqj2O2swm"
+      },
+      {
+        "time": "2026-09-15T19:42:02.236Z",
+        "type": "connect",
+        "peerId": "-PM0400-UIIIqj2O2swm"
+      }
+    ]
+  },
+  "bytes": {
+    "httpDownloaded": 313203148,
+    "p2pDownloaded": 209870673,
+    "otherDownloaded": 0,
+    "p2pUploaded": 273281136,
+    "downloadEvents": 10877,
+    "uploadEvents": 4189
+  },
+  "segments": {
+    "loaded": 0,
+    "p2p": 0,
+    "http": 0,
+    "unknownSource": 0,
+    "ids": []
+  },
+  "playback": {
+    "state": "playing",
+    "currentTime": 222.218808,
+    "duration": 634.584,
+    "error": null
+  },
+  "verdict": {
+    "peerConnected": true,
+    "p2pBytesReceived": true,
+    "p2pBytesUploaded": true,
+    "p2pSegmentLoaded": false,
+    "proof": true
+  }
+}
+
+{
+  "test": {
+    "name": "HiveStream Phase 1B — Actual P2P Media Proof",
+    "version": 2,
+    "startedAt": "2026-09-15T19:38:53.233Z",
+    "elapsedMs": 297990,
+    "authorship": "William von Meister (Project Owner) + GPT-5.6 Luna / LUNA-HS-001 (AI Collaborator)"
+  },
+  "dependencies": {
+    "hlsJs": "1.7.0",
+    "p2pMediaLoaderHlsJs": "4.0.0"
+  },
+  "environment": {
+    "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Mobile Safari/537.36",
+    "platform": "Linux armv81",
+    "webRtcSupported": true,
+    "hlsSupported": true
+  },
+  "configuration": {
+    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "swarmId": "hivestream-phase1-proof-v1"
+  },
+  "peers": {
+    "connected": 8,
+    "closed": 7,
+    "current": [
+      "-PM0400-0OAhoQwwNBg3"
+    ],
+    "events": [
+      {
+        "time": "2026-09-15T19:38:56.251Z",
+        "type": "connect",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      },
+      {
+        "time": "2026-09-15T19:39:22.839Z",
+        "type": "connect",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      },
+      {
+        "time": "2026-09-15T19:39:22.843Z",
+        "type": "connect",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      },
+      {
+        "time": "2026-09-15T19:39:25.323Z",
+        "type": "close",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      },
+      {
+        "time": "2026-09-15T19:39:25.329Z",
+        "type": "close",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      },
+      {
+        "time": "2026-09-15T19:40:43.888Z",
+        "type": "connect",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      },
+      {
+        "time": "2026-09-15T19:40:51.896Z",
+        "type": "connect",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      },
+      {
+        "time": "2026-09-15T19:40:53.322Z",
+        "type": "connect",
+        "peerId": "-PM0400-Ho5gvpjYBGFW"
+      },
+      {
+        "time": "2026-09-15T19:40:53.336Z",
+        "type": "connect",
+        "peerId": "-PM0400-eLiJrKgTzJCy"
+      },
+      {
+        "time": "2026-09-15T19:40:55.853Z",
+        "type": "close",
+        "peerId": "-PM0400-9MTDSL2drdEJ"
+      },
+      {
+        "time": "2026-09-15T19:40:59.538Z",
+        "type": "close",
+        "peerId": "-PM0400-eLiJrKgTzJCy"
+      },
+      {
+        "time": "2026-09-15T19:41:05.028Z",
+        "type": "close",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      },
+      {
+        "time": "2026-09-15T19:41:11.254Z",
+        "type": "close",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      },
+      {
+        "time": "2026-09-15T19:41:29.633Z",
+        "type": "close",
+        "peerId": "-PM0400-Ho5gvpjYBGFW"
+      },
+      {
+        "time": "2026-09-15T19:42:02.235Z",
+        "type": "connect",
+        "peerId": "-PM0400-0OAhoQwwNBg3"
+      }
+    ]
+  },
+  "bytes": {
+    "httpDownloaded": 318734054,
+    "p2pDownloaded": 273084531,
+    "otherDownloaded": 0,
+    "p2pUploaded": 210394953,
+    "downloadEvents": 11089,
+    "uploadEvents": 3224
+  },
+  "segments": {
+    "loaded": 0,
+    "p2p": 0,
+    "http": 0,
+    "unknownSource": 0,
+    "ids": []
+  },
+  "playback": {
+    "state": "playing",
+    "currentTime": 236.14071,
+    "duration": 634.6,
+    "error": null
+  },
+  "verdict": {
+    "peerConnected": true,
+    "p2pBytesReceived": true,
+    "p2pBytesUploaded": true,
+    "p2pSegmentLoaded": false,
+    "proof": true
+  }
+}
+
+### End ###
