@@ -1,5 +1,9 @@
 # HiveStream Vision
 
+> **Authorship:** William von Meister (Project Owner) + GPT-5.6 Luna (AI Collaborator)
+>
+> **Authorship rule:** This document was created collaboratively in this project. Human decisions, direction, and requirements are attributed to William von Meister; AI-authored drafting and analysis are attributed to GPT-5.6 Luna.
+
 ## 1. The problem
 
 Modern browser-based media systems usually treat each viewer as a consumer of a remote source. A browser downloads media, plays it, and eventually discards most of what it received.
