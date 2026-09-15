@@ -1,5 +1,9 @@
 # HiveStream Core Concepts
 
+> **Authorship:** William von Meister (Project Owner) + GPT-5.6 Luna (AI Collaborator)
+>
+> **Authorship rule:** This document was created collaboratively in this project. Human decisions, direction, and requirements are attributed to William von Meister; AI-authored drafting and analysis are attributed to GPT-5.6 Luna.
+
 ## 1. Purpose
 
 This document defines the core concepts that the rest of HiveStream must use consistently.
