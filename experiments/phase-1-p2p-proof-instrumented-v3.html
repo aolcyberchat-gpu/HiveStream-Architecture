@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>HiveStream Phase 1B — Native P2P/HLS Correlation Instrument</title>
+  <!--
+    Authorship: William von Meister (Project Owner) + GPT-5.6 Luna / LUNA-HS-001 (AI Collaborator)
+
+    Authorship rule: This document was created collaboratively in this project. Human decisions,
+    direction, and requirements are attributed to William von Meister; AI-authored drafting and
+    analysis are attributed to the named AI collaborator and its unique project author ID.
+    Author ID identifies provenance, not technical authority. Technical authority comes from
+    evidence, reproducible experiments, project-owner decisions, and explicit adoption.
+
+    Purpose:
+      Phase-1B measurement instrument, not HiveStream application code.
+      This is a NEW instrument. The prior phase-1-p2p-proof.html is intentionally unchanged.
+
+    Pinned dependencies:
+      Hls.js 1.7.0
+      p2p-media-loader-hlsjs 4.0.0
+
+    Design rule:
+      Native p2p-media-loader fields are recorded verbatim. Derived correlations are kept
+      separate and are never substituted for native identifiers.
+
+    Native 4.0.0 concepts instrumented here include:
+      Stream: runtimeId, type, properties, swarmId, identityHash, streamSwarmId, infoHash
+      Segment: runtimeId, externalId, url, byteRange, startTime, endTime
+      Peer: peerId, infoHash, trackerUrl when supplied by the event
+      Chunk download: bytesLength, downloadSource, peerId, streamType, infoHash
+      Chunk upload: bytesLength, peerId, streamType, infoHash
+      Segment lifecycle: segment plus infoHash/streamType where supplied
+      Tracker events: trackerUrl/infoHash when supplied
+
+    Important:
+      A WebRTC connection is not media proof.
+      P2P chunk bytes are stronger evidence but are not automatically assigned to an HLS
+      segment. A segment is counted as P2P only when the native onSegmentLoaded event says
+      downloadSource === "p2p".
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.0/dist/hls.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/p2p-media-loader-hlsjs@4.0.0/dist/p2p-media-loader-hlsjs.iife.min.js"></script>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui,sans-serif; }
+    body { margin:0; padding:16px; background:#111; color:#eee; }
+    main { max-width:1000px; margin:auto; }
+    label { display:block; margin-top:12px; font-weight:700; }
+    input,button,textarea { box-sizing:border-box; width:100%; margin-top:6px; padding:10px; border:1px solid #555; border-radius:6px; background:#1c1c1c; color:#eee; font:inherit; }
+    button { cursor:pointer; font-weight:700; }
+    video { width:100%; max-height:60vh; margin-top:16px; background:#000; }
+    pre { white-space:pre-wrap; overflow-wrap:anywhere; background:#080808; border:1px solid #333; padding:12px; border-radius:6px; line-height:1.35; }
+    textarea { min-height:280px; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; resize:vertical; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>HiveStream Phase 1B — Native P2P/HLS Correlation Instrument</h1>
+  <p>Run one player per device when testing cross-device behavior. Use identical stream URL and swarm ID. This version records native P2P Media Loader 4.0.0 identities and lifecycle events without inventing a segment ID.</p>
+
+  <label for="streamUrl">HLS stream URL</label>
+  <input id="streamUrl" type="url" spellcheck="false">
+  <label for="swarmId">Swarm ID</label>
+  <input id="swarmId" type="text" spellcheck="false">
+  <button id="startButton">Start P2P Player</button>
+  <button id="copyButton">Copy JSON Results</button>
+  <video id="video" controls playsinline></video>
+
+  <h2>Status</h2>
+  <pre id="status">Not started.</pre>
+  <h2>Event Log</h2>
+  <pre id="log"></pre>
+  <h2>JSON Export</h2>
+  <p id="copyStatus">If clipboard access is blocked, the JSON will be selected for manual Copy.</p>
+  <textarea id="jsonExport" readonly spellcheck="false" aria-label="JSON test results"></textarea>
+</main>
+<script>
+(function () {
+  "use strict";
+
+  var DEFAULT_STREAM = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8";
+  var DEFAULT_SWARM = "hivestream-phase1-proof-v1";
+  var HLS_VERSION = "1.7.0";
+  var P2PML_VERSION = "4.0.0";
+  var MAX_EVENTS = 2000;
+
+  var video = document.getElementById("video");
+  var streamInput = document.getElementById("streamUrl");
+  var swarmInput = document.getElementById("swarmId");
+  var startButton = document.getElementById("startButton");
+  var copyButton = document.getElementById("copyButton");
+  var statusEl = document.getElementById("status");
+  var logEl = document.getElementById("log");
+  var jsonExport = document.getElementById("jsonExport");
+  var copyStatus = document.getElementById("copyStatus");
+  var hls = null;
+  var engine = null;
+  var startedAt = null;
+
+  var result = {
+    test: {
+      name: "HiveStream Phase 1B — Native P2P/HLS Correlation Instrument",
+      version: 3,
+      startedAt: null,
+      elapsedMs: 0,
+      authorship: "William von Meister (Project Owner) + GPT-5.6 Luna / LUNA-HS-001 (AI Collaborator)"
+    },
+    dependencies: { hlsJs:"1.7.0", p2pMediaLoaderHlsJs:"4.0.0" },
+    environment: {
+      userAgent:navigator.userAgent,
+      platform:navigator.platform,
+      webRtcSupported:typeof RTCPeerConnection !== "undefined",
+      hlsSupported:false
+    },
+    configuration: { streamUrl:"", swarmId:"" },
+    native: {
+      streams: [],
+      peers: { connected:0, closed:0, events:[] },
+      chunks: { downloaded:[], uploaded:[] },
+      segments: { started:[], loaded:[], errors:[], aborted:[] },
+      trackers: { errors:[], warnings:[] },
+      otherEvents: []
+    },
+    hlsJs: {
+      fragmentsLoaded: [],
+      errors: []
+    },
+    derived: {
+      bytes: { httpDownloaded:0, p2pDownloaded:0, otherDownloaded:0, p2pUploaded:0 },
+      chunkEventCounts: { downloaded:0, uploaded:0 },
+      segmentCounts: { started:0, loaded:0, p2pLoaded:0, httpLoaded:0, unknownLoaded:0, error:0, aborted:0 },
+      peerIds: [],
+      infoHashes: [],
+      correlation: {
+        nativeP2PSegmentLoads: 0,
+        notes: [
+          "A segment is classified as P2P only from native onSegmentLoaded downloadSource.",
+          "Chunk events are not assigned to HLS segments unless the library exposes a native relationship.",
+          "HLS FRAG_LOADED is recorded independently and is not treated as P2P proof."
+        ]
+      }
+    },
+    playback: { state:"idle", currentTime:0, duration:0, error:null },
+    verdict: {
+      streamIdentityObserved:false,
+      peerConnected:false,
+      p2pChunkBytesReceived:false,
+      p2pSegmentLoaded:false,
+      proof:false
+    },
+    eventLog: []
+  };
+
+  function iso(){ return new Date().toISOString(); }
+  function num(v){ return typeof v === "number" && isFinite(v) ? v : 0; }
+
+  function safeClone(value, depth, seen) {
+    depth = depth || 0;
+    seen = seen || [];
+    if(depth > 8) return "[max-depth]";
+    if(value === null || value === undefined) return value;
+    var t = typeof value;
+    if(t === "string" || t === "number" || t === "boolean") return value;
+    if(t === "bigint") return String(value);
+    if(t === "function") return "[function]";
+    if(t !== "object") return String(value);
+    if(seen.indexOf(value) !== -1) return "[circular]";
+    seen.push(value);
+    if(value instanceof ArrayBuffer) return {type:"ArrayBuffer",byteLength:value.byteLength};
+    if(typeof ArrayBuffer !== "undefined" && ArrayBuffer.isView && ArrayBuffer.isView(value)) return {type:value.constructor&&value.constructor.name||"TypedArray",byteLength:value.byteLength};
+    if(Array.isArray(value)) return value.slice(0,200).map(function(v){return safeClone(v,depth+1,seen);});
+    var out = {};
+    Object.keys(value).slice(0,200).forEach(function(k){
+      try { out[k] = safeClone(value[k],depth+1,seen); } catch(e) { out[k] = "[unreadable]"; }
+    });
+    return out;
+  }
+
+  function pushBounded(arr, value){
+    arr.push(value);
+    if(arr.length > MAX_EVENTS) arr.splice(0, arr.length-MAX_EVENTS);
+  }
+
+  function log(message, data) {
+    var entry = {time:iso(), message:message, data:data === undefined ? null : safeClone(data)};
+    pushBounded(result.eventLog, entry);
+    var line = "["+entry.time+"] "+message;
+    if(data !== undefined) { try { line += " "+JSON.stringify(entry.data); } catch(e) {} }
+    logEl.textContent += line+"\n";
+    var lines = logEl.textContent.split("\n");
+    if(lines.length > 350) logEl.textContent = lines.slice(-350).join("\n");
+  }
+
+  function rememberUnique(arr, value){ if(value != null && arr.indexOf(value) === -1) arr.push(value); }
+
+  function recordPeer(details, type) {
+    var d = safeClone(details);
+    if(d && d.peerId) rememberUnique(result.derived.peerIds,d.peerId);
+    if(d && d.infoHash) rememberUnique(result.derived.infoHashes,d.infoHash);
+    pushBounded(result.native.peers.events,{time:iso(),type:type,details:d});
+    if(type === "connect") result.native.peers.connected++;
+    if(type === "close") result.native.peers.closed++;
+    log("P2P PEER "+type.toUpperCase(),d);
+  }
+
+  function recordChunk(direction, args) {
+    var raw = Array.prototype.slice.call(args);
+    var bytes = num(raw[0]);
+    var item = {
+      time:iso(),
+      bytesLength:bytes,
+      downloadSource:direction === "download" ? (raw[1] == null ? null : String(raw[1])) : null,
+      peerId:direction === "download" ? (raw[2] == null ? null : String(raw[2])) : (raw[1] == null ? null : String(raw[1])),
+      streamType:direction === "download" ? (raw[3] == null ? null : String(raw[3])) : (raw[2] == null ? null : String(raw[2])),
+      infoHash:direction === "download" ? (raw[4] == null ? null : String(raw[4])) : (raw[3] == null ? null : String(raw[3])),
+      rawArguments:safeClone(raw)
+    };
+    if(item.peerId) rememberUnique(result.derived.peerIds,item.peerId);
+    if(item.infoHash) rememberUnique(result.derived.infoHashes,item.infoHash);
+    if(direction === "download") {
+      result.derived.chunkEventCounts.downloaded++;
+      if(item.downloadSource === "p2p") result.derived.bytes.p2pDownloaded += bytes;
+      else if(item.downloadSource === "http") result.derived.bytes.httpDownloaded += bytes;
+      else result.derived.bytes.otherDownloaded += bytes;
+      pushBounded(result.native.chunks.downloaded,item);
+    } else {
+      result.derived.chunkEventCounts.uploaded++;
+      result.derived.bytes.p2pUploaded += bytes;
+      pushBounded(result.native.chunks.uploaded,item);
+    }
+    log("P2P CHUNK "+direction.toUpperCase(),item);
+  }
+
+  function recordSegment(eventName, details) {
+    var d = safeClone(details);
+    var bucket = eventName === "onSegmentStart" ? result.native.segments.started : eventName === "onSegmentLoaded" ? result.native.segments.loaded : eventName === "onSegmentError" ? result.native.segments.errors : result.native.segments.aborted;
+    pushBounded(bucket,{time:iso(),details:d});
+    if(eventName === "onSegmentStart") result.derived.segmentCounts.started++;
+    if(eventName === "onSegmentError") result.derived.segmentCounts.error++;
+    if(eventName === "onSegmentAbort") result.derived.segmentCounts.aborted++;
+    if(eventName === "onSegmentLoaded") {
+      result.derived.segmentCounts.loaded++;
+      var src = details && details.downloadSource != null ? String(details.downloadSource) : null;
+      if(src === "p2p") { result.derived.segmentCounts.p2pLoaded++; result.derived.correlation.nativeP2PSegmentLoads++; }
+      else if(src === "http") result.derived.segmentCounts.httpLoaded++;
+      else result.derived.segmentCounts.unknownLoaded++;
+    }
+    if(d && d.infoHash) rememberUnique(result.derived.infoHashes,d.infoHash);
+    log("NATIVE "+eventName,d);
+  }
+
+  function bindEngine(e) {
+    if(!e || !e.addEventListener) throw new Error("P2P engine event API unavailable");
+    engine = e;
+
+    e.addEventListener("onStreamAdded",function(details){
+      var d=safeClone(details);
+      pushBounded(result.native.streams,{time:iso(),details:d});
+      if(d && d.stream) {
+        if(d.stream.infoHash) rememberUnique(result.derived.infoHashes,d.stream.infoHash);
+        result.verdict.streamIdentityObserved=true;
+      }
+      log("NATIVE onStreamAdded",d);
+      render();
+    });
+
+    e.addEventListener("onPeerConnect",function(d){recordPeer(d,"connect");render();});
+    e.addEventListener("onPeerClose",function(d){recordPeer(d,"close");render();});
+    e.addEventListener("onPeerError",function(d){recordPeer(d,"error");render();});
+    e.addEventListener("onPeerWarning",function(d){recordPeer(d,"warning");render();});
+    e.addEventListener("onPeerConnectError",function(d){recordPeer(d,"connectError");render();});
+
+    e.addEventListener("onChunkDownloaded",function(){recordChunk("download",arguments);render();});
+    e.addEventListener("onChunkUploaded",function(){recordChunk("upload",arguments);render();});
+
+    e.addEventListener("onSegmentStart",function(d){recordSegment("onSegmentStart",d);render();});
+    e.addEventListener("onSegmentLoaded",function(d){recordSegment("onSegmentLoaded",d);render();});
+    e.addEventListener("onSegmentError",function(d){recordSegment("onSegmentError",d);render();});
+    e.addEventListener("onSegmentAbort",function(d){recordSegment("onSegmentAbort",d);render();});
+
+    e.addEventListener("onTrackerError",function(d){pushBounded(result.native.trackers.errors,{time:iso(),details:safeClone(d)});log("NATIVE onTrackerError",d);render();});
+    e.addEventListener("onTrackerWarning",function(d){pushBounded(result.native.trackers.warnings,{time:iso(),details:safeClone(d)});log("NATIVE onTrackerWarning",d);render();});
+  }
+
+  function bindHls() {
+    if(!hls || !Hls.Events) return;
+    hls.on(Hls.Events.FRAG_LOADED,function(event,data){
+      var frag=data&&data.frag;
+      var item={
+        time:iso(),
+        type:"FRAG_LOADED",
+        sn:frag&&frag.sn!=null?frag.sn:null,
+        url:frag&&frag.url?frag.url:null,
+        start:frag&&typeof frag.start==="number"?frag.start:null,
+        duration:frag&&typeof frag.duration==="number"?frag.duration:null,
+        stats:safeClone(data&&data.stats)
+      };
+      pushBounded(result.hlsJs.fragmentsLoaded,item);
+      log("HLS FRAG_LOADED (not P2P proof)",item);
+      render();
+    });
+    hls.on(Hls.Events.ERROR,function(event,data){
+      var d=safeClone(data);
+      pushBounded(result.hlsJs.errors,{time:iso(),details:d});
+      log("HLS ERROR",d);
+      render();
+    });
+  }
+
+  function updateVerdict(){
+    result.verdict.peerConnected=result.native.peers.connected>0;
+    result.verdict.p2pChunkBytesReceived=result.derived.bytes.p2pDownloaded>0;
+    result.verdict.p2pSegmentLoaded=result.derived.segmentCounts.p2pLoaded>0;
+    result.verdict.proof=result.verdict.p2pSegmentLoaded || result.verdict.p2pChunkBytesReceived;
+  }
+
+  function render(){
+    if(startedAt) result.test.elapsedMs=Date.now()-startedAt;
+    result.playback.currentTime=num(video.currentTime);
+    result.playback.duration=num(video.duration);
+    updateVerdict();
+    var total=result.derived.bytes.httpDownloaded+result.derived.bytes.p2pDownloaded+result.derived.bytes.otherDownloaded;
+    var ratio=total ? result.derived.bytes.p2pDownloaded/total*100 : 0;
+    var verdict=result.verdict.p2pSegmentLoaded ? "PROOF: NATIVE P2P SEGMENT LOAD OBSERVED" : result.verdict.p2pChunkBytesReceived ? "P2P CHUNK BYTES OBSERVED — SEGMENT SOURCE NOT YET CORRELATED" : result.verdict.peerConnected ? "PEER CONNECTED — WAITING FOR P2P MEDIA" : "WAITING FOR P2P PEER";
+    statusEl.textContent =
+      verdict+"\n\n"+
+      "Hls.js:                    "+HLS_VERSION+"\n"+
+      "P2P Media Loader:          "+P2PML_VERSION+"\n"+
+      "Stream identities observed: "+result.native.streams.length+"\n"+
+      "Peer connects:              "+result.native.peers.connected+"\n"+
+      "Peer closes:                "+result.native.peers.closed+"\n"+
+      "Unique peer IDs:            "+result.derived.peerIds.length+"\n"+
+      "Unique infohashes:          "+result.derived.infoHashes.length+"\n"+
+      "Chunk P2P downloaded:       "+result.derived.bytes.p2pDownloaded+" bytes\n"+
+      "Chunk HTTP downloaded:      "+result.derived.bytes.httpDownloaded+" bytes\n"+
+      "Chunk P2P uploaded:         "+result.derived.bytes.p2pUploaded+" bytes\n"+
+      "Native segments loaded:     "+result.derived.segmentCounts.loaded+"\n"+
+      "Native segments via P2P:    "+result.derived.segmentCounts.p2pLoaded+"\n"+
+      "Native segments via HTTP:   "+result.derived.segmentCounts.httpLoaded+"\n"+
+      "HLS FRAG_LOADED events:     "+result.hlsJs.fragmentsLoaded.length+"\n"+
+      "P2P download ratio:         "+ratio.toFixed(2)+"%\n"+
+      "Playback state:             "+result.playback.state+"\n"+
+      "Swarm ID:                   "+result.configuration.swarmId;
+    jsonExport.value=JSON.stringify(result,null,2);
+  }
+
+  function bindVideo(){
+    ["loadstart","loadedmetadata","canplay","playing","pause","waiting","stalled","ended","error"].forEach(function(name){
+      video.addEventListener(name,function(){
+        result.playback.state=name;
+        result.playback.error=video.error ? {code:video.error.code,message:video.error.message||null}:null;
+        log("VIDEO "+name,result.playback.error||undefined);
+        render();
+      });
+    });
+  }
+
+  function start(){
+    if(hls){try{hls.destroy();}catch(e){}hls=null;}
+    engine=null;
+    logEl.textContent="";
+    startedAt=Date.now();
+    result.test.startedAt=iso();
+    result.configuration.streamUrl=streamInput.value.trim();
+    result.configuration.swarmId=swarmInput.value.trim();
+    result.environment.hlsSupported=!!(window.Hls&&Hls.isSupported());
+    if(!result.configuration.streamUrl) throw new Error("HLS stream URL is empty");
+    if(!result.configuration.swarmId) throw new Error("Swarm ID is empty");
+    if(!window.Hls) throw new Error("Hls.js failed to load");
+    if(!window.p2pml||!window.p2pml.hlsjs||!window.p2pml.hlsjs.HlsJsP2PEngine) throw new Error("Pinned p2p-media-loader-hlsjs bundle failed to load");
+    if(!Hls.isSupported()) throw new Error("Hls.js is not supported in this browser");
+    if(typeof RTCPeerConnection === "undefined") throw new Error("WebRTC is unavailable in this browser");
+
+    var HlsJsP2PEngine=window.p2pml.hlsjs.HlsJsP2PEngine;
+    var HlsWithP2P=HlsJsP2PEngine.injectMixin(Hls);
+    hls=new HlsWithP2P({
+      p2p:{
+        core:{swarmId:result.configuration.swarmId},
+        onHlsJsCreated:function(createdHls){
+          if(!createdHls.p2pEngine) throw new Error("Hls.js P2P engine was not created");
+          bindEngine(createdHls.p2pEngine);
+          log("P2P ENGINE READY",{swarmId:result.configuration.swarmId});
+          render();
+        }
+      }
+    });
+    bindHls();
+    hls.attachMedia(video);
+    hls.loadSource(result.configuration.streamUrl);
+    log("STARTED",{streamUrl:result.configuration.streamUrl,swarmId:result.configuration.swarmId,hlsJs:HLS_VERSION,p2pMediaLoader:P2PML_VERSION});
+    render();
+  }
+
+  streamInput.value=new URLSearchParams(window.location.search).get("stream")||DEFAULT_STREAM;
+  swarmInput.value=new URLSearchParams(window.location.search).get("swarm")||DEFAULT_SWARM;
+  bindVideo();
+  render();
+
+  startButton.addEventListener("click",function(){
+    try{start();}catch(e){log("START ERROR",{message:e.message,stack:e.stack||null});statusEl.textContent="START ERROR: "+e.message;render();}
+  });
+
+  copyButton.addEventListener("click",function(){
+    render();
+    var text=jsonExport.value;
+    function copied(){copyStatus.textContent="JSON copied to clipboard.";log("JSON COPIED");}
+    function fallback(){
+      jsonExport.focus();jsonExport.select();
+      try{if(document.execCommand("copy")){copied();return;}}catch(e){}
+      copyStatus.textContent="Clipboard access was blocked. JSON is selected below for manual Copy.";
+      log("CLIPBOARD FAILED — JSON SELECTED FOR MANUAL COPY");
+    }
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(copied).catch(fallback); else fallback();
+  });
+})();
+</script>
+</body>
+</html>
