@@ -1,0 +1,125 @@
+### start ###
+
+### human created and uploaded file based of test results from phase-1-p2p-proof.html @ https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/experiments/phase-1-p2p-proof.html ###
+
+
+### mobile phone test results. Phone is connected to same WiFi network as laptop ###
+
+{
+  "test": {
+    "name": "HiveStream Phase 1B — Actual P2P Media Proof",
+    "version": 2,
+    "startedAt": "2026-09-15T21:04:33.884Z",
+    "elapsedMs": 81832,
+    "authorship": "William von Meister (Project Owner) + GPT-5.6 Luna / LUNA-HS-001 (AI Collaborator)"
+  },
+  "dependencies": {
+    "hlsJs": "1.7.0",
+    "p2pMediaLoaderHlsJs": "4.0.0"
+  },
+  "environment": {
+    "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36",
+    "platform": "Linux armv81",
+    "webRtcSupported": true,
+    "hlsSupported": true
+  },
+  "configuration": {
+    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "swarmId": "hivestream-phase1-proof-v1"
+  },
+  "peers": {
+    "connected": 0,
+    "closed": 0,
+    "current": [],
+    "events": []
+  },
+  "bytes": {
+    "httpDownloaded": 75710114,
+    "p2pDownloaded": 0,
+    "otherDownloaded": 0,
+    "p2pUploaded": 0,
+    "downloadEvents": 434,
+    "uploadEvents": 0
+  },
+  "segments": {
+    "loaded": 0,
+    "p2p": 0,
+    "http": 0,
+    "unknownSource": 0,
+    "ids": []
+  },
+  "playback": {
+    "state": "playing",
+    "currentTime": 79.479681,
+    "duration": 634.584,
+    "error": null
+  },
+  "verdict": {
+    "peerConnected": false,
+    "p2pBytesReceived": false,
+    "p2pBytesUploaded": false,
+    "p2pSegmentLoaded": false,
+    "proof": false
+  }
+}
+
+### laptop test running chrome on the swame wifi network as phone ###
+{
+  "test": {
+    "name": "HiveStream Phase 1B — Actual P2P Media Proof",
+    "version": 2,
+    "startedAt": "2026-09-15T21:03:26.345Z",
+    "elapsedMs": 399432,
+    "authorship": "William von Meister (Project Owner) + GPT-5.6 Luna / LUNA-HS-001 (AI Collaborator)"
+  },
+  "dependencies": {
+    "hlsJs": "1.7.0",
+    "p2pMediaLoaderHlsJs": "4.0.0"
+  },
+  "environment": {
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+    "platform": "Win32",
+    "webRtcSupported": true,
+    "hlsSupported": true
+  },
+  "configuration": {
+    "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    "swarmId": "hivestream-phase1-proof-v1"
+  },
+  "peers": {
+    "connected": 0,
+    "closed": 0,
+    "current": [],
+    "events": []
+  },
+  "bytes": {
+    "httpDownloaded": 138475469,
+    "p2pDownloaded": 0,
+    "otherDownloaded": 0,
+    "p2pUploaded": 0,
+    "downloadEvents": 1425,
+    "uploadEvents": 0
+  },
+  "segments": {
+    "loaded": 0,
+    "p2p": 0,
+    "http": 0,
+    "unknownSource": 0,
+    "ids": []
+  },
+  "playback": {
+    "state": "playing",
+    "currentTime": 376.930692,
+    "duration": 634.584,
+    "error": null
+  },
+  "verdict": {
+    "peerConnected": false,
+    "p2pBytesReceived": false,
+    "p2pBytesUploaded": false,
+    "p2pSegmentLoaded": false,
+    "proof": false
+  }
+}
+
+### end ###
