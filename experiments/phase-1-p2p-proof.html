@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>HiveStream Phase 1B — Actual P2P Media Proof</title>
+
+  <!--
+    Authorship: William von Meister (Project Owner) + GPT-5.6 Luna / LUNA-HS-001 (AI Collaborator)
+
+    This is a canonical, reproducible Phase 1B measurement instrument.
+    It is not HiveStream application code.
+
+    Dependencies are intentionally pinned:
+      Hls.js 1.7.0
+      p2p-media-loader-hlsjs 4.0.0
+
+    The test asks one narrow question:
+      Can two independent browsers exchange actual HLS media bytes through
+      the P2P Media Loader WebRTC path?
+
+    A WebRTC peer connection alone is NOT proof. P2P byte/segment events are.
+  -->
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.0/dist/hls.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/p2p-media-loader-hlsjs@4.0.0/dist/p2p-media-loader-hlsjs.iife.min.js"></script>
+
+  <style>
+    :root { color-scheme: dark; font-family: system-ui,sans-serif; }
+    body { margin:0; padding:16px; background:#111; color:#eee; }
+    main { max-width:900px; margin:auto; }
+    label { display:block; margin-top:12px; font-weight:700; }
+    input,button { box-sizing:border-box; width:100%; margin-top:6px; padding:10px; border:1px solid #555; border-radius:6px; background:#1c1c1c; color:#eee; font:inherit; }
+    button { cursor:pointer; font-weight:700; }
+    video { width:100%; max-height:60vh; margin-top:16px; background:#000; }
+    pre { white-space:pre-wrap; overflow-wrap:anywhere; background:#080808; border:1px solid #333; padding:12px; border-radius:6px; line-height:1.35; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>HiveStream Phase 1B — Actual P2P Media Proof</h1>
+  <p>Use the same stream URL and swarm ID in two independent browsers. Start A first, then B. Do not treat a peer connection as proof; watch for non-zero P2P media bytes.</p>
+
+  <label for="streamUrl">HLS stream URL</label>
+  <input id="streamUrl" type="url" spellcheck="false">
+
+  <label for="swarmId">Swarm ID</label>
+  <input id="swarmId" type="text" spellcheck="false">
+
+  <button id="startButton">Start P2P Player</button>
+  <button id="copyButton">Copy JSON Results</button>
+
+  <video id="video" controls playsinline></video>
+
+  <h2>Status</h2>
+  <pre id="status">Not started.</pre>
+
+  <h2>Event Log</h2>
+  <pre id="log"></pre>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var DEFAULT_STREAM = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8";
+  var DEFAULT_SWARM = "hivestream-phase1-proof-v1";
+  var HLS_VERSION = "1.7.0";
+  var P2PML_VERSION = "4.0.0";
+
+  var video = document.getElementById("video");
+  var streamInput = document.getElementById("streamUrl");
+  var swarmInput = document.getElementById("swarmId");
+  var startButton = document.getElementById("startButton");
+  var copyButton = document.getElementById("copyButton");
+  var statusEl = document.getElementById("status");
+  var logEl = document.getElementById("log");
+  var hls = null;
+  var startedAt = null;
+
+  var result = {
+    test: {
+      name: "HiveStream Phase 1B — Actual P2P Media Proof",
+      version: 2,
+      startedAt: null,
+      elapsedMs: 0,
+      authorship: "William von Meister (Project Owner) + GPT-5.6 Luna / LUNA-HS-001 (AI Collaborator)"
+    },
+    dependencies: {
+      hlsJs: HLS_VERSION,
+      p2pMediaLoaderHlsJs: P2PML_VERSION
+    },
+    environment: {
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      webRtcSupported: typeof RTCPeerConnection !== "undefined",
+      hlsSupported: false
+    },
+    configuration: { streamUrl:"", swarmId:"" },
+    peers: { connected:0, closed:0, current:[], events:[] },
+    bytes: { httpDownloaded:0, p2pDownloaded:0, otherDownloaded:0, p2pUploaded:0, downloadEvents:0, uploadEvents:0 },
+    segments: { loaded:0, p2p:0, http:0, unknownSource:0, ids:[] },
+    playback: { state:"idle", currentTime:0, duration:0, error:null },
+    verdict: {
+      peerConnected:false,
+      p2pBytesReceived:false,
+      p2pBytesUploaded:false,
+      p2pSegmentLoaded:false,
+      proof:false
+    }
+  };
+
+  function iso() { return new Date().toISOString(); }
+  function num(v) { return typeof v === "number" && isFinite(v) ? v : 0; }
+  function source(v) { return v == null ? "unknown" : String(v).toLowerCase(); }
+  function p2pSource(v) { var s=source(v); return s.indexOf("p2p")!==-1 || s.indexOf("peer")!==-1 || s.indexOf("webrtc")!==-1; }
+  function httpSource(v) { var s=source(v); return s.indexOf("http")!==-1 || s.indexOf("cdn")!==-1 || s.indexOf("server")!==-1; }
+
+  function log(message, data) {
+    var line="["+iso()+"] "+message;
+    if(data!==undefined) {
+      try { line += " "+JSON.stringify(data); } catch(e) { line += " [unserializable]"; }
+    }
+    logEl.textContent += line+"\n";
+    var lines=logEl.textContent.split("\n");
+    if(lines.length>300) logEl.textContent=lines.slice(-300).join("\n");
+  }
+
+  function updateVerdict() {
+    result.verdict.peerConnected=result.peers.connected>0;
+    result.verdict.p2pBytesReceived=result.bytes.p2pDownloaded>0;
+    result.verdict.p2pBytesUploaded=result.bytes.p2pUploaded>0;
+    result.verdict.p2pSegmentLoaded=result.segments.p2p>0;
+    result.verdict.proof=result.verdict.p2pSegmentLoaded || result.verdict.p2pBytesReceived;
+  }
+
+  function render() {
+    if(startedAt) result.test.elapsedMs=Date.now()-startedAt;
+    result.playback.currentTime=num(video.currentTime);
+    result.playback.duration=num(video.duration);
+    updateVerdict();
+    var total=result.bytes.httpDownloaded+result.bytes.p2pDownloaded+result.bytes.otherDownloaded;
+    var ratio=total ? result.bytes.p2pDownloaded/total*100 : 0;
+    var verdict=result.verdict.proof
+      ? "PROOF: ACTUAL P2P MEDIA BYTES OBSERVED"
+      : result.verdict.peerConnected
+        ? "PEER CONNECTED — WAITING FOR P2P MEDIA BYTES"
+        : "WAITING FOR PEER CONNECTION";
+    statusEl.textContent=
+      verdict+"\n\n"+
+      "Hls.js:               "+HLS_VERSION+"\n"+
+      "P2P Media Loader:     "+P2PML_VERSION+"\n"+
+      "Peers connected:      "+result.peers.connected+"\n"+
+      "Peers currently known:"+result.peers.current.length+"\n"+
+      "HTTP downloaded:      "+result.bytes.httpDownloaded+" bytes\n"+
+      "P2P downloaded:       "+result.bytes.p2pDownloaded+" bytes\n"+
+      "P2P uploaded:         "+result.bytes.p2pUploaded+" bytes\n"+
+      "P2P download ratio:   "+ratio.toFixed(2)+"%\n"+
+      "Segments loaded:      "+result.segments.loaded+"\n"+
+      "Segments via HTTP:    "+result.segments.http+"\n"+
+      "Segments via P2P:     "+result.segments.p2p+"\n"+
+      "Playback state:       "+result.playback.state+"\n"+
+      "Swarm ID:             "+result.configuration.swarmId;
+  }
+
+  function bindVideo() {
+    ["loadstart","loadedmetadata","canplay","playing","pause","waiting","stalled","ended","error"].forEach(function(name){
+      video.addEventListener(name,function(){
+        result.playback.state=name;
+        result.playback.error=video.error ? {code:video.error.code,message:video.error.message||null}:null;
+        log("VIDEO "+name,result.playback.error||undefined);
+        render();
+      });
+    });
+  }
+
+  function bindEngine(engine) {
+    if(!engine || !engine.addEventListener) throw new Error("P2P engine event API unavailable");
+
+    engine.addEventListener("onPeerConnect",function(details){
+      result.peers.connected++;
+      var id=details&&details.peerId?details.peerId:"unknown";
+      if(result.peers.current.indexOf(id)===-1) result.peers.current.push(id);
+      result.peers.events.push({time:iso(),type:"connect",peerId:id});
+      log("P2P PEER CONNECTED",details);
+      render();
+    });
+
+    engine.addEventListener("onPeerClose",function(details){
+      result.peers.closed++;
+      var id=details&&details.peerId?details.peerId:"unknown";
+      result.peers.current=result.peers.current.filter(function(x){return x!==id;});
+      result.peers.events.push({time:iso(),type:"close",peerId:id});
+      log("P2P PEER CLOSED",details);
+      render();
+    });
+
+    engine.addEventListener("onPeerError",function(details){log("P2P PEER ERROR",details);});
+    engine.addEventListener("onPeerWarning",function(details){log("P2P PEER WARNING",details);});
+    engine.addEventListener("onPeerConnectError",function(details){log("P2P PEER CONNECT ERROR",details);});
+
+    engine.addEventListener("onChunkDownloaded",function(bytesLength,downloadSource,peerId){
+      var bytes=num(bytesLength);
+      result.bytes.downloadEvents++;
+      if(p2pSource(downloadSource)) result.bytes.p2pDownloaded+=bytes;
+      else if(httpSource(downloadSource)) result.bytes.httpDownloaded+=bytes;
+      else result.bytes.otherDownloaded+=bytes;
+      log("CHUNK DOWNLOADED",{bytes:bytes,source:downloadSource,peerId:peerId||null});
+      render();
+    });
+
+    engine.addEventListener("onChunkUploaded",function(bytesLength,peerId){
+      var bytes=num(bytesLength);
+      result.bytes.uploadEvents++;
+      result.bytes.p2pUploaded+=bytes;
+      log("CHUNK UPLOADED TO PEER",{bytes:bytes,peerId:peerId||null});
+      render();
+    });
+  }
+
+  function start() {
+    if(hls) { try { hls.destroy(); } catch(e) {} hls=null; }
+    logEl.textContent="";
+    startedAt=Date.now();
+    result.test.startedAt=iso();
+    result.configuration.streamUrl=streamInput.value.trim();
+    result.configuration.swarmId=swarmInput.value.trim();
+    result.environment.hlsSupported=!!(window.Hls && Hls.isSupported());
+
+    if(!result.configuration.streamUrl) throw new Error("HLS stream URL is empty");
+    if(!result.configuration.swarmId) throw new Error("Swarm ID is empty");
+    if(!window.Hls) throw new Error("Hls.js failed to load");
+    if(!window.p2pml || !window.p2pml.hlsjs || !window.p2pml.hlsjs.HlsJsP2PEngine) throw new Error("Pinned p2p-media-loader-hlsjs bundle failed to load");
+    if(!Hls.isSupported()) throw new Error("Hls.js is not supported in this browser");
+    if(typeof RTCPeerConnection === "undefined") throw new Error("WebRTC is unavailable in this browser");
+
+    var HlsJsP2PEngine=window.p2pml.hlsjs.HlsJsP2PEngine;
+    var HlsWithP2P=HlsJsP2PEngine.injectMixin(Hls);
+
+    hls=new HlsWithP2P({
+      p2p:{
+        core:{swarmId:result.configuration.swarmId},
+        onHlsJsCreated:function(createdHls){
+          if(!createdHls.p2pEngine) throw new Error("Hls.js P2P engine was not created");
+          bindEngine(createdHls.p2pEngine);
+          log("P2P ENGINE READY",{swarmId:result.configuration.swarmId});
+        }
+      }
+    });
+
+    hls.on(Hls.Events.ERROR,function(event,data){ log("HLS ERROR",data); });
+    hls.attachMedia(video);
+    hls.loadSource(result.configuration.streamUrl);
+    log("STARTED",{streamUrl:result.configuration.streamUrl,swarmId:result.configuration.swarmId,hlsJs:HLS_VERSION,p2pMediaLoader:P2PML_VERSION});
+    render();
+  }
+
+  streamInput.value=new URLSearchParams(window.location.search).get("stream") || DEFAULT_STREAM;
+  swarmInput.value=new URLSearchParams(window.location.search).get("swarm") || DEFAULT_SWARM;
+  bindVideo();
+  render();
+
+  startButton.addEventListener("click",function(){
+    try { start(); }
+    catch(e) { log("START ERROR",{message:e.message,stack:e.stack||null}); statusEl.textContent="START ERROR: "+e.message; }
+  });
+
+  copyButton.addEventListener("click",function(){
+    render();
+    var text=JSON.stringify(result,null,2);
+    if(navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function(){log("JSON COPIED");},function(){log("CLIPBOARD FAILED");});
+    } else {
+      var ta=document.createElement("textarea"); ta.value=text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); log("JSON COPIED");
+    }
+  });
+})();
+</script>
+</body>
+</html>
+
+<!--
+Authorship rule: This document was created collaboratively in this project. Human decisions, direction, and requirements are attributed to William von Meister; AI-authored drafting and analysis are attributed to the named AI collaborator and its unique project author ID. Author ID identifies provenance, not technical authority. Technical authority comes from evidence, reproducible experiments, project-owner decisions, and explicit adoption.
+-->
