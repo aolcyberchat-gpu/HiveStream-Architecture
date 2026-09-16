@@ -6,25 +6,7 @@
 <meta name="description" content="HiveStream Architecture — browser-native cooperative media replication and P2P media experiments.">
 <title>HiveStream Architecture</title>
 <style>
-:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#e8edf2;background:#0b0f14;line-height:1.5}
-*{box-sizing:border-box}
-body{margin:0}
-main{width:min(100% - 28px,980px);margin:auto;padding:32px 0 56px}
-header{padding:28px 0 24px;border-bottom:1px solid #27313b}
-h1{font-size:clamp(2rem,7vw,3.4rem);line-height:1.05;margin:0 0 12px}
-.lead{font-size:1.08rem;color:#b9c4ce;max-width:760px;margin:0}
-.status{display:inline-block;margin-top:18px;padding:6px 10px;border:1px solid #394653;border-radius:999px;font-size:.82rem;color:#cbd5de}
-section{margin-top:28px}
-h2{font-size:1.25rem;margin:0 0 12px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
-a.card{display:block;text-decoration:none;color:inherit;border:1px solid #2b3641;border-radius:12px;padding:16px;background:#111820;transition:transform .12s,border-color .12s}
-a.card:hover{transform:translateY(-1px);border-color:#617180}
-.card strong{display:block;font-size:1rem;margin-bottom:5px}
-.card span{display:block;color:#aab6c1;font-size:.9rem}
-.primary{border-color:#526678!important;background:#141e27!important}
-code{font-size:.88em;color:#cdd8e2}
-footer{margin-top:34px;padding-top:18px;border-top:1px solid #27313b;color:#8996a2;font-size:.78rem}
-@media(max-width:520px){main{width:min(100% - 20px,980px);padding-top:20px}.grid{grid-template-columns:1fr}}
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#e8edf2;background:#0b0f14;line-height:1.5}*{box-sizing:border-box}body{margin:0}main{width:min(100% - 28px,980px);margin:auto;padding:32px 0 56px}header{padding:28px 0 24px;border-bottom:1px solid #27313b}h1{font-size:clamp(2rem,7vw,3.4rem);line-height:1.05;margin:0 0 12px}.lead{font-size:1.08rem;color:#b9c4ce;max-width:760px;margin:0}.status{display:inline-block;margin-top:18px;padding:6px 10px;border:1px solid #394653;border-radius:999px;font-size:.82rem;color:#cbd5de}section{margin-top:28px}h2{font-size:1.25rem;margin:0 0 12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}a.card{display:block;text-decoration:none;color:inherit;border:1px solid #2b3641;border-radius:12px;padding:16px;background:#111820;transition:transform .12s,border-color .12s}a.card:hover{transform:translateY(-1px);border-color:#617180}.card strong{display:block;font-size:1rem;margin-bottom:5px}.card span{display:block;color:#aab6c1;font-size:.9rem}.primary{border-color:#526678!important;background:#141e27!important}code{font-size:.88em;color:#cdd8e2}footer{margin-top:34px;padding-top:18px;border-top:1px solid #27313b;color:#8996a2;font-size:.78rem}@media(max-width:520px){main{width:min(100% - 20px,980px);padding-top:20px}.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -34,41 +16,26 @@ footer{margin-top:34px;padding-top:18px;border-top:1px solid #27313b;color:#8996
 <p class="lead">Canonical architecture and experimental evidence for a browser-native cooperative media replication system. P2P playback is the first practical workload; persistent distributed media availability is the larger architectural goal.</p>
 <div class="status">Phase 1B — P2P media transfer investigation</div>
 </header>
-
-<section>
-<h2>Run the experiments</h2>
-<div class="grid">
+<section><h2>Run the experiments</h2><div class="grid">
 <a class="card primary" href="phase-1-p2p-proof-instrumented-v5.html"><strong>Phase 1B Connectivity Instrument v5</strong><span>Run the current WebRTC / P2P connectivity diagnostic in the browser.</span></a>
 <a class="card" href="experiments/phase-1-p2p-proof.html"><strong>Phase 1B P2P Proof</strong><span>Original Phase 1 media-transfer proof experiment.</span></a>
 <a class="card" href="experiments/phase-1-p2p-proof-instrumented-v5.html"><strong>v5 Source Experiment</strong><span>Open the canonical v5 instrument directly from the experiments directory.</span></a>
-</div>
-</section>
-
-<section>
-<h2>Architecture</h2>
-<div class="grid">
+</div></section>
+<section><h2>Architecture</h2><div class="grid">
 <a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/VISION.md"><strong>Vision</strong><span>Project purpose and long-term direction.</span></a>
 <a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/ARCHITECTURE.md"><strong>Architecture</strong><span>System boundaries, layers, data flow, storage and distribution.</span></a>
 <a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/CORE-CONCEPTS.md"><strong>Core Concepts</strong><span>Media, representations, segments, replicas and swarm semantics.</span></a>
 <a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/REPLICA-MODEL.md"><strong>Replica Model</strong><span>Verified local media state and replica semantics.</span></a>
 <a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/MEDIA-DISTRIBUTION.md"><strong>Media Distribution</strong><span>P2P and HTTP distribution architecture.</span></a>
 <a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/REPLICATION.md"><strong>Replication</strong><span>Replication behavior and policy.</span></a>
-</div>
-</section>
-
-<section>
-<h2>Evidence and project state</h2>
-<div class="grid">
+</div></section>
+<section><h2>Evidence and project state</h2><div class="grid">
 <a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/EXPERIMENTS.md"><strong>Experiments</strong><span>Evidence rules, experiment requirements and proof criteria.</span></a>
 <a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/PROJECT-STATE-AND-KEY-FINDINGS.md"><strong>Project State &amp; Key Findings</strong><span>Current accumulated findings and evidence.</span></a>
 <a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/IMPLEMENTATION-READINESS-REVIEW.md"><strong>Implementation Readiness Review</strong><span>Assessment of the transition from architecture to implementation.</span></a>
 <a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/ROADMAP.md"><strong>Roadmap</strong><span>Planned implementation and validation sequence.</span></a>
-</div>
-</section>
-
-<section>
-<h2>HS experiment series</h2>
-<div class="grid">
+</div></section>
+<section><h2>HS experiment series</h2><div class="grid">
 <a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/HS-003-ACTUAL-P2P-SEGMENT-TRANSFER.md"><strong>HS-003 — Actual P2P Segment Transfer</strong><span>Evidence for actual media-byte transfer between peers.</span></a>
 <a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/HS-004-PERSISTENT-REPLICA.md"><strong>HS-004 — Persistent Replica</strong><span>Persistence proof and retained verified data.</span></a>
 <a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/HS-005-REUSE-AFTER-RELOAD.md"><strong>HS-005 — Reuse After Reload</strong><span>Reuse of retained data after browser/session reload.</span></a>
@@ -76,16 +43,11 @@ footer{margin-top:34px;padding-top:18px;border-top:1px solid #27313b;color:#8996
 <a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/HS-007-DURABLE-SEEDER-PROOF.md"><strong>HS-007 — Durable Seeder Proof</strong><span>Durable peer availability experiment.</span></a>
 <a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/HS-008-REPLICATION-POLICY.md"><strong>HS-008 — Replication Policy</strong><span>Replication-policy validation.</span></a>
 <a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/HS-009-MULTI-TAB-SEMANTICS.md"><strong>HS-009 — Multi-Tab Semantics</strong><span>Browser multi-tab behavior.</span></a>
-<a class="card" href="https://github.com/aolcychat-gpu/HiveStream-Architecture/blob/main/HS-010-LOCAL-INGESTION.md"><strong>HS-010 — Local Ingestion</strong><span>Local media ingestion and verification.</span></a>
-<a class="card" href="https://github.com/aolcychat-gpu/HiveStream-Architecture/blob/main/HS-011-CYTUBE-ADAPTER.md"><strong>HS-011 — CyTube Adapter</strong><span>CyTube integration boundary.</span></a>
-<a class="card" href="https://github.com/aolcychat-gpu/HiveStream-Architecture/blob/main/HS-012-HIGHER-LEVEL-SYNCHRONIZATION.md"><strong>HS-012 — Higher-Level Synchronization</strong><span>Playback synchronization above media distribution.</span></a>
-</div>
-</section>
-
-<footer>
-<strong>Authorship:</strong> William von Meister (Project Owner) + GPT-5.6 Luna / <code>LUNA-HS-001</code> (AI Collaborator)<br>
-<strong>Authorship rule:</strong> This document was created collaboratively in this project. Human decisions, direction, and requirements are attributed to William von Meister; AI-authored drafting and analysis are attributed to the named AI collaborator and its unique project author ID. Author ID identifies provenance, not technical authority. Technical authority comes from evidence, reproducible experiments, project-owner decisions, and explicit adoption.
-</footer>
+<a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/HS-010-LOCAL-INGESTION.md"><strong>HS-010 — Local Ingestion</strong><span>Local media ingestion and verification.</span></a>
+<a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/HS-011-CYTUBE-ADAPTER.md"><strong>HS-011 — CyTube Adapter</strong><span>CyTube integration boundary.</span></a>
+<a class="card" href="https://github.com/aolcyberchat-gpu/HiveStream-Architecture/blob/main/HS-012-HIGHER-LEVEL-SYNCHRONIZATION.md"><strong>HS-012 — Higher-Level Synchronization</strong><span>Playback synchronization above media distribution.</span></a>
+</div></section>
+<footer><strong>Authorship:</strong> William von Meister (Project Owner) + GPT-5.6 Luna / <code>LUNA-HS-001</code> (AI Collaborator)<br><strong>Authorship rule:</strong> This document was created collaboratively in this project. Human decisions, direction, and requirements are attributed to William von Meister; AI-authored drafting and analysis are attributed to the named AI collaborator and its unique project author ID. Author ID identifies provenance, not technical authority. Technical authority comes from evidence, reproducible experiments, project-owner decisions, and explicit adoption.</footer>
 </main>
 </body>
 </html>
