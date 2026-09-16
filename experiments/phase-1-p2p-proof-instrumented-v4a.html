@@ -1,100 +1,95 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>HiveStream Phase 1B — Native P2P/HLS Correlation Instrument v4a</title>
-  <!--
-    Authorship: William von Meister (Project Owner) + GPT-5.6 Luna / LUNA-HS-001 (AI Collaborator)
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>HiveStream Phase 1B — Native P2P/HLS Correlation Instrument v4a</title>
+<!--
+  Authorship: William von Meister (Project Owner) + GPT-5.6 Luna / LUNA-HS-001 (AI Collaborator)
 
-    v4a is a delivery/export revision of v4. The v4 measurement instrument is preserved and
-    loaded unchanged; v4a adds a complete JSON file download control so large result sets do not
-    have to pass through the clipboard.
+  v4a is intentionally NOT a reduced replacement for v4. It loads the COMPLETE v4 instrument
+  source, then adds one download control to the existing v4 page. The P2P measurement instrument,
+  UI, event logging, native identities, variant control, JSON export, and evidence semantics all
+  remain the v4 implementation.
 
-    This wrapper intentionally does not alter P2P logic, stream identity, variant selection,
-    peer identity, or evidence semantics.
-  -->
-  <style>
-    :root { color-scheme: dark; font-family: system-ui,sans-serif; }
-    body { margin:0; padding:16px; background:#111; color:#eee; }
-    main { max-width:1100px; margin:auto; }
-    .note { padding:12px; border:1px solid #444; border-radius:6px; background:#171717; margin-bottom:12px; }
-    iframe { width:100%; height:90vh; min-height:900px; border:1px solid #444; border-radius:6px; background:#111; }
-    button { box-sizing:border-box; width:100%; margin:0 0 12px; padding:12px; border:1px solid #555; border-radius:6px; background:#1c1c1c; color:#eee; font:inherit; font-weight:700; cursor:pointer; }
-    #status { white-space:pre-wrap; overflow-wrap:anywhere; }
-  </style>
+  This is a delivery/export revision only. v4 remains unchanged.
+-->
+<style>
+  html,body { margin:0; padding:0; background:#111; color:#eee; }
+  #loader { padding:16px; font:16px system-ui,sans-serif; }
+</style>
 </head>
 <body>
-<main>
-  <h1>HiveStream Phase 1B — Native P2P/HLS Correlation Instrument v4a</h1>
-  <div class="note">
-    <strong>v4a export revision.</strong> The v4 instrument is loaded without changing its P2P
-    measurement logic. This page adds a reliable <strong>Download Complete JSON Results</strong>
-    button so large result sets can be saved directly as a .json file instead of copied through
-    the clipboard.
-  </div>
-  <button id="downloadButton" disabled>Download Complete JSON Results</button>
-  <div id="status">Loading v4 instrument…</div>
-  <iframe id="instrument" title="HiveStream Phase 1B v4 instrument"></iframe>
-</main>
+<div id="loader">Loading the complete v4 instrument…</div>
 <script>
 (function () {
   "use strict";
 
-  var V4_URL = "https://aolcyberchat-gpu.github.io/HiveStream-Architecture/experiments/phase-1-p2p-proof-instrumented-v4.html";
-  var frame = document.getElementById("instrument");
-  var button = document.getElementById("downloadButton");
-  var status = document.getElementById("status");
+  var SOURCE = "https://raw.githubusercontent.com/aolcyberchat-gpu/HiveStream-Architecture/main/experiments/phase-1-p2p-proof-instrumented-v4.html";
 
-  function timestamp() {
-    return new Date().toISOString().replace(/[:.]/g, "-");
-  }
+  function buildDownloadControl() {
+    var button = document.createElement("button");
+    button.id = "hivestreamV4aDownloadResults";
+    button.type = "button";
+    button.textContent = "Download Complete JSON Results";
+    button.style.cssText = [
+      "position:fixed",
+      "right:12px",
+      "bottom:12px",
+      "z-index:2147483647",
+      "width:auto",
+      "margin:0",
+      "padding:12px 16px",
+      "border:1px solid #777",
+      "border-radius:6px",
+      "background:#1c1c1c",
+      "color:#eee",
+      "font:700 14px system-ui,sans-serif",
+      "cursor:pointer",
+      "box-shadow:0 2px 10px #000"
+    ].join(";");
 
-  function downloadResults() {
-    try {
-      var win = frame.contentWindow;
-      var doc = frame.contentDocument;
-      if (!win || !doc) throw new Error("v4 document is not accessible");
-
-      /*
-       * v4's result object is intentionally kept private to its closure, so v4a retrieves the
-       * exact JSON already rendered by v4's own JSON export textarea. This is the same complete
-       * result object used by v4's Copy JSON Results control; no textarea truncation is involved.
-       */
-      var textarea = doc.getElementById("jsonExport");
+    button.addEventListener("click", function () {
+      var textarea = document.getElementById("jsonExport");
       if (!textarea || !textarea.value) {
-        throw new Error("No JSON results are available yet. Run the test first.");
+        alert("No JSON results are available yet. Run the test first.");
+        return;
       }
 
-      var blob = new Blob([textarea.value], { type: "application/json;charset=utf-8" });
+      var blob = new Blob([textarea.value], { type:"application/json;charset=utf-8" });
       var url = URL.createObjectURL(blob);
-      var a = doc.createElement("a");
-      a.href = url;
-      a.download = "hivestream-phase1b-v4a-" + timestamp() + ".json";
-      doc.body.appendChild(a);
-      a.click();
-      a.remove();
+      var link = document.createElement("a");
+      link.href = url;
+      link.download = "hivestream-phase1b-v4a-" + new Date().toISOString().replace(/[:.]/g, "-") + ".json";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
       setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-      status.textContent = "JSON download started: " + a.download;
-    } catch (error) {
-      status.textContent = "Download error: " + (error && error.message ? error.message : String(error));
-    }
+    });
+
+    document.body.appendChild(button);
   }
 
-  button.addEventListener("click", downloadResults);
-
-  frame.addEventListener("load", function () {
-    try {
-      var doc = frame.contentDocument;
-      if (!doc) throw new Error("v4 document is not accessible");
-      button.disabled = false;
-      status.textContent = "v4 loaded. Run the test inside the instrument. When results are ready, click Download Complete JSON Results.";
-    } catch (error) {
-      status.textContent = "Could not access the v4 instrument: " + (error && error.message ? error.message : String(error));
-    }
-  });
-
-  frame.src = V4_URL;
+  fetch(SOURCE, { cache:"no-store" })
+    .then(function (response) {
+      if (!response.ok) throw new Error("HTTP " + response.status + " while loading v4");
+      return response.text();
+    })
+    .then(function (html) {
+      /*
+       * Inject the download control into the actual v4 source before replacing this loader page.
+       * Nothing from v4 is copied, simplified, or reimplemented here; the complete source is used.
+       */
+      var injection = "<script>" + buildDownloadControl.toString() + ";buildDownloadControl();<\\/script>";
+      html = html.replace("</body>", injection + "</body>");
+      document.open();
+      document.write(html);
+      document.close();
+    })
+    .catch(function (error) {
+      var loader = document.getElementById("loader");
+      loader.textContent = "Could not load the complete v4 instrument: " + (error && error.message ? error.message : String(error));
+    });
 })();
 </script>
 </body>
