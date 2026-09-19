@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HiveStream Phase 1B — Natural Swarm Diagnostic v6</title>
+<!--
+  HiveStream Phase 1B — Natural Swarm Diagnostic (v6)
+  Authorship: William von Meister (Project Owner) + Claude / CLAUDE-HS-001 (AI Collaborator).
+  This document was created collaboratively in this project. Human decisions, direction, and
+  requirements are attributed to William von Meister; AI-authored drafting and analysis are
+  attributed to the named AI collaborator and its unique project author ID. Author ID identifies
+  provenance, not technical authority. Technical authority comes from evidence, reproducible
+  experiments, project-owner decisions, and explicit adoption.
+
+  Built from "HiveStream — Natural Swarm Diagnostic Build Plan (v6)" (Google Doc, 2026-09-18).
+  Supersedes v5 for the natural/open-swarm experiment specifically. v5 remains the reference
+  instrument for the existing custom-swarm (hivestream-phase1-proof-v1) connectivity checks —
+  this file does not replace it for that purpose; see the "Custom" mode below for that check.
+
+  Fixes vs v5:
+    - Swarm ID is an explicit Natural / Custom mode toggle, not a free-text field. In Natural
+      mode the `swarmId` key is omitted from the p2p config object entirely, so
+      p2p-media-loader's own `config.swarmId ?? this.manifestResponseUrl` fallback (core.ts)
+      resolves the swarm ID to the manifest's resolved response URL. v5 always sent
+      `swarmId: <field>.trim()`, so blanking that field sent an empty string — `??` treats ''
+      as present, not missing — silently registering the stream under swarm '' instead of the
+      natural default. That bug is why this file exists.
+    - Adds tracker-URL, per-segment rendition-match (via infoHash equality against the
+      registered controlled-variant stream), and environment capture — none of which v5
+      recorded.
+    - AUTO variant mode is carried over from v5 with its known limitation intact, not fixed
+      here: selectedVariant.found only becomes true if/when hls.js's own ABR logic happens to
+      land exactly on the controlled 848x480/836280 rendition, so verdict.proof is unreliable
+      in that mode. Left as-is deliberately, out of scope for this fix — CONTROLLED stays the
+      recommended/default mode.
+
+  Dependencies pinned to match the v3/v4/v5 lineage exactly: hls.js 1.7.0,
+  p2p-media-loader-hlsjs 4.0.0 (both confirmed current against upstream as of 2026-09-18).
+-->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.0/dist/hls.min.js"></script>
+<script>
+  // Captures every RTCPeerConnection the page creates so ICE/connection state can be
+  // inspected directly, underneath whatever p2p-media-loader reports on its own. Must run
+  // before the p2p-media-loader-hlsjs script tag below so its internal connections are
+  // wrapped too. Ported from v5 unchanged.
+  (function () {
+    var Native = window.RTCPeerConnection;
+    var pcs = [];
+    window.__HS_V6_PEER_CONNECTIONS = pcs;
+    if (!Native) return;
+    function Wrapped() {
+      var args = [].slice.call(arguments);
+      var pc = new (Function.prototype.bind.apply(Native, [null].concat(args)))();
+      pcs.push(pc);
+      return pc;
+    }
+    Wrapped.prototype = Native.prototype;
+    try { Object.setPrototypeOf(Wrapped, Native); } catch (e) {}
+    window.RTCPeerConnection = Wrapped;
+  })();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/p2p-media-loader-hlsjs@4.0.0/dist/p2p-media-loader-hlsjs.iife.min.js"></script>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: #111; color: #eee; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; line-height: 1.45; }
+  main { max-width: 1100px; margin: auto; }
+  h1 { font-size: 1.2rem; margin: 0 0 6px; }
+  p.sub { color: #9aa0a6; margin: 0 0 18px; max-width: 78ch; }
+  section.controls { border: 1px solid #333; border-radius: 4px; padding: 14px; margin-bottom: 16px; background: #161616; }
+  section.controls label { display: block; margin-top: 10px; font-size: 12px; color: #9aa0a6; }
+  section.controls input[type="text"], section.controls select { width: 100%; margin-top: 4px; padding: 8px; background: #1c1c1c; color: #eee; border: 1px solid #444; border-radius: 3px; font: inherit; }
+  section.controls input[disabled] { opacity: .45; }
+  .mode-row { display: flex; gap: 18px; margin-top: 6px; flex-wrap: wrap; }
+  .mode-row label { display: flex; align-items: center; gap: 6px; color: #eee; font-size: 13px; margin-top: 0; }
+  .btnrow { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  button { padding: 9px 14px; background: #2a2f36; color: #eee; border: 1px solid #4a4f57; border-radius: 3px; font: inherit; cursor: pointer; }
+  button:hover { background: #343a42; }
+  button.primary { background: #3d6b46; border-color: #4f8a5c; }
+  button.primary:hover { background: #48804f; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #6ea8fe; outline-offset: 1px; }
+  video { width: 100%; max-height: 42vh; background: #000; margin-bottom: 16px; display: block; }
+  .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 720px) { .panels { grid-template-columns: 1fr; } }
+  .panel { border: 1px solid #333; border-radius: 4px; padding: 12px; background: #161616; min-width: 0; }
+  .panel h2 { font-size: 12px; margin: 0 0 8px; color: #c8ccd0; border-bottom: 1px solid #2a2a2a; padding-bottom: 6px; font-weight: 600; }
+  .panel.full { grid-column: 1 / -1; }
+  .panel.proof { border-color: #4a4f27; }
+  .panel.proof.hit { border-color: #5c9e3a; background: #132015; }
+  .row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px solid #232323; font-size: 12.5px; }
+  .row:last-child { border-bottom: none; }
+  .row .k { color: #9aa0a6; flex-shrink: 0; }
+  .row .v { text-align: right; word-break: break-all; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+  table th, table td { text-align: left; padding: 4px 6px; border-bottom: 1px solid #232323; }
+  table th { color: #9aa0a6; font-weight: normal; }
+  .pill { display: inline-block; padding: 1px 7px; border-radius: 9px; font-size: 11px; white-space: nowrap; }
+  .pill.ok { background: #1e3a22; color: #7fd18a; }
+  .pill.warn { background: #3a331e; color: #e0c26a; }
+  .pill.err { background: #3a1e1e; color: #e08a8a; }
+  .pill.idle { background: #2a2a2a; color: #999; }
+  .scroller { max-height: 220px; overflow: auto; }
+  h2.sectionhead { font-size: 13px; color: #9aa0a6; margin: 22px 0 6px; font-weight: 600; }
+  pre, textarea { white-space: pre-wrap; overflow-wrap: anywhere; background: #0b0b0b; padding: 10px; border: 1px solid #2a2a2a; border-radius: 3px; }
+  textarea { min-height: 220px; font-family: inherit; width: 100%; }
+  .foot { margin-top: 20px; color: #666; font-size: 11px; line-height: 1.6; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>HiveStream Phase 1B — Natural Swarm Diagnostic (v6)</h1>
+<p class="sub">Joins whatever swarm p2p-media-loader derives on its own for the manifest below — no custom swarm ID unless Custom mode is explicitly selected. Run one instance of this page at a time: that's what makes any peer it finds a stranger rather than another tab of your own.</p>
+
+<section class="controls">
+  <label for="u">HLS master URL</label>
+  <input id="u" type="text" value="https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8">
+
+  <label>Swarm mode</label>
+  <div class="mode-row">
+    <label><input type="radio" name="mode" value="natural" checked> Natural (default — swarmId key omitted)</label>
+    <label><input type="radio" name="mode" value="custom"> Custom</label>
+  </div>
+  <input id="customId" type="text" value="hivestream-phase1-proof-v1" disabled>
+
+  <label for="v">Variant</label>
+  <select id="v">
+    <option value="480">CONTROLLED — 848×480 / 836280 (recommended)</option>
+    <option value="auto">AUTO — adaptive (verdict.proof can't reliably confirm in this mode — see header comment)</option>
+  </select>
+
+  <div class="btnrow">
+    <button id="go" class="primary">Start</button>
+    <button id="copy">Copy JSON</button>
+  </div>
+</section>
+
+<video id="video" controls playsinline></video>
+
+<section class="panels">
+  <div class="panel"><h2>Manifest / HLS</h2><div id="pManifest">Not started.</div></div>
+  <div class="panel"><h2>Swarm identity</h2><div id="pSwarm">Not started.</div></div>
+  <div class="panel"><h2>Trackers</h2><div id="pTrackers">No tracker activity yet.</div></div>
+  <div class="panel"><h2>Peers</h2><div id="pPeers">No peer activity yet.</div></div>
+  <div class="panel full">
+    <h2>Media transfer</h2>
+    <div id="pTransferSummary"></div>
+    <div class="scroller">
+      <table id="pTransferTable">
+        <thead><tr><th>time</th><th>seg #</th><th>source</th><th>peer</th><th>bytes</th><th>rendition</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="panel proof full" id="proofPanel">
+    <h2>Proof event</h2>
+    <div id="pProof">No P2P segment received yet — peer discovery and a WebRTC connection alone don't count.</div>
+  </div>
+</section>
+
+<h2 class="sectionhead">Log</h2>
+<pre id="log" class="scroller" style="max-height:200px"></pre>
+
+<h2 class="sectionhead">JSON export</h2>
+<textarea id="json" readonly></textarea>
+
+<p class="foot">v6 · hls.js 1.7.0 · p2p-media-loader-hlsjs 4.0.0 · Authorship: William von Meister (Project Owner) + Claude / CLAUDE-HS-001 (AI Collaborator). Author ID identifies provenance, not technical authority — see AI-COLLABORATION-AND-AUTHORSHIP.md.</p>
+
+</main>
+<script>
+(function () {
+  'use strict';
+
+  // ---- constants -----------------------------------------------------------
+  var LEGACY_CUSTOM_SWARM_ID = 'hivestream-phase1-proof-v1'; // v3/v4/v4a/v5's swarm — prefilled for Custom mode only
+  var CONTROLLED = { width: 848, height: 480, bitrate: 836280 }; // the rendition used across all Phase 1B testing so far
+
+  // ---- DOM refs --------------------------------------------------------------
+  function $(id) { return document.getElementById(id); }
+  var uInput = $('u'), customIdInput = $('customId'), variantSelect = $('v');
+  var goBtn = $('go'), copyBtn = $('copy'), videoEl = $('video');
+  var logEl = $('log'), jsonEl = $('json');
+  var panels = {
+    manifest: $('pManifest'),
+    swarm: $('pSwarm'),
+    trackers: $('pTrackers'),
+    peers: $('pPeers'),
+    transferSummary: $('pTransferSummary'),
+    transferTable: $('pTransferTable').querySelector('tbody'),
+    proof: $('pProof'),
+    proofPanel: $('proofPanel')
+  };
+  customIdInput.value = LEGACY_CUSTOM_SWARM_ID;
+
+  function modeValue() {
+    return document.querySelector('input[name="mode"]:checked').value;
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="mode"]'), function (radio) {
+    radio.addEventListener('change', function () {
+      customIdInput.disabled = (modeValue() !== 'custom');
+    });
+  });
+
+  // ---- small helpers -----------------------------------------------------------
+  function uuid() {
+    return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now() + '-' + Math.random().toString(16).slice(2));
+  }
+  function now() { return new Date().toISOString(); }
+  function esc(s) {
+    return String(s === undefined || s === null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  function fmtBytes(n) {
+    n = Number(n) || 0;
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    return (n / (1024 * 1024)).toFixed(2) + ' MB';
+  }
+  function cap(arr, item, max) {
+    arr.push(item);
+    if (arr.length > max) arr.splice(0, arr.length - max);
+  }
+  function safe(x, depth, seen) {
+    depth = depth || 0; seen = seen || [];
+    if (depth > 6) return '[max-depth]';
+    if (x === null || x === undefined || typeof x !== 'object') return typeof x === 'bigint' ? String(x) : x;
+    if (seen.indexOf(x) >= 0) return '[circular]';
+    seen = seen.concat([x]);
+    if (Array.isArray(x)) return x.slice(0, 100).map(function (v) { return safe(v, depth + 1, seen); });
+    var out = {};
+    Object.keys(x).slice(0, 100).forEach(function (k) {
+      try { out[k] = safe(x[k], depth + 1, seen); } catch (e) { out[k] = '[unreadable]'; }
+    });
+    return out;
+  }
+  function log(msg, data) {
+    cap(R.events, { time: now(), message: msg, data: data === undefined ? null : safe(data) }, 4000);
+    logEl.textContent += '[' + now() + '] ' + msg + (data === undefined ? '' : ' ' + JSON.stringify(safe(data))) + '\n';
+    var lines = logEl.textContent.split('\n');
+    if (lines.length > 500) logEl.textContent = lines.slice(-500).join('\n');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  // ---- state -----------------------------------------------------------------
+  var R = {
+    test: {
+      name: 'HiveStream Phase 1B — Natural Swarm Diagnostic',
+      version: 6,
+      startedAt: null,
+      elapsedMs: 0,
+      authorship: 'William von Meister (Project Owner) + Claude / CLAUDE-HS-001 (AI Collaborator)'
+    },
+    identity: { browserInstanceId: uuid(), runId: null },
+    environment: {
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      webRtcSupported: !!window.RTCPeerConnection,
+      hlsSupported: !!(window.Hls && Hls.isSupported && Hls.isSupported())
+    },
+    dependencies: { hlsJs: '1.7.0', p2pMediaLoaderHlsJs: '4.0.0' },
+    configuration: { streamUrl: '', swarmMode: 'natural', customSwarmId: null, variantMode: '480', targetVariant: CONTROLLED },
+    manifest: { url: '', loaded: false, renditions: [], activeLevelIndex: null },
+    selectedVariant: { found: false, levelIndex: null },
+    swarm: { resolvedSwarmId: null, controlledInfoHash: null, streams: [] },
+    trackers: {},
+    peers: {},
+    transfer: { bytes: { http: 0, p2pDown: 0, p2pUp: 0 }, segments: [] },
+    webrtc: { peerConnections: [], ice: { host: 0, srflx: 0, relay: 0, other: 0 } },
+    verdict: {
+      streamIdentityObserved: false,
+      controlledVariantFound: false,
+      peerConnected: false,
+      p2pChunkBytesReceived: false,
+      p2pSegmentLoaded: false,
+      p2pSegmentMatchedSelectedVariant: false,
+      proof: false
+    },
+    events: []
+  };
+
+  function matchesControlled(props) {
+    return !!props && Number(props.width) === CONTROLLED.width && Number(props.height) === CONTROLLED.height && Number(props.bitrate) === CONTROLLED.bitrate;
+  }
+
+  // ---- WebRTC/ICE instrumentation (ported from v5) ----------------------------
+  function attachPC(pc, index) {
+    var rec = { index: index, createdAt: now(), states: { signaling: pc.signalingState, ice: pc.iceConnectionState, connection: pc.connectionState }, candidateTypes: {}, selectedPair: null };
+    R.webrtc.peerConnections.push(rec);
+    pc.addEventListener('signalingstatechange', function () { rec.states.signaling = pc.signalingState; });
+    pc.addEventListener('iceconnectionstatechange', function () {
+      rec.states.ice = pc.iceConnectionState;
+      log('webrtc:iceconnection', { pcIndex: index, state: pc.iceConnectionState });
+    });
+    pc.addEventListener('connectionstatechange', function () {
+      rec.states.connection = pc.connectionState;
+      log('webrtc:connection', { pcIndex: index, state: pc.connectionState });
+    });
+    pc.addEventListener('icecandidate', function (e) {
+      if (!e.candidate) return;
+      var m = /( typ )([a-z0-9]+)/i.exec(e.candidate.candidate || '');
+      var t = m ? m[2].toLowerCase() : 'other';
+      rec.candidateTypes[t] = (rec.candidateTypes[t] || 0) + 1;
+      R.webrtc.ice[t] = (R.webrtc.ice[t] || 0) + 1;
+    });
+  }
+  function pollStats() {
+    var pcs = window.__HS_V6_PEER_CONNECTIONS || [];
+    while (R.webrtc.peerConnections.length < pcs.length) attachPC(pcs[R.webrtc.peerConnections.length], R.webrtc.peerConnections.length);
+    pcs.forEach(function (pc, i) {
+      if (!pc || !pc.getStats) return;
+      pc.getStats().then(function (report) {
+        var hit = null;
+        report.forEach(function (s) { if (s.type === 'candidate-pair' && s.state === 'succeeded' && (s.selected || s.nominated)) hit = s; });
+        if (hit) R.webrtc.peerConnections[i].selectedPair = { id: hit.id, bytesSent: hit.bytesSent, bytesReceived: hit.bytesReceived, rtt: hit.currentRoundTripTime };
+      }).catch(function () {});
+    });
+  }
+
+  // ---- p2p-media-loader core event wiring -------------------------------------
+  // Payload shapes verified directly against p2p-media-loader-core's types.ts
+  // (commit 527105b420c15dfdb0e8ed4b6f0a261f48411192): StreamAddedDetails,
+  // PeerDetails, TrackerEventDetails, SegmentLoadDetails, and the positional
+  // onChunkDownloaded/onChunkUploaded args.
+  function touchTracker(url, infoHash) {
+    // The library's CoreEventMap has no "tracker connected" event — only
+    // onTrackerError/onTrackerWarning. A peer sighting with this trackerUrl is the
+    // only positive signal available that the tracker is actually working, so a
+    // healthy tracker is inferred from peer discovery, not left silent until it
+    // eventually errors.
+    if (!url) return null;
+    var rec = R.trackers[url] || (R.trackers[url] = { status: 'idle', lastEvent: null, lastEventAt: null, infoHashes: [], peersSeen: 0 });
+    if (infoHash && rec.infoHashes.indexOf(infoHash) < 0) rec.infoHashes.push(infoHash);
+    return rec;
+  }
+  function notePeer(d, event, note) {
+    var id = d && d.peerId;
+    if (!id) return;
+    var rec = R.peers[id] || (R.peers[id] = { trackerUrl: d.trackerUrl || null, infoHash: d.infoHash || null, connected: false, firstSeen: now(), lastEvent: null, lastEventAt: null });
+    rec.lastEvent = event;
+    rec.lastEventAt = now();
+    if (d.trackerUrl) rec.trackerUrl = d.trackerUrl;
+    if (event === 'connected') { rec.connected = true; R.verdict.peerConnected = true; }
+    if (event === 'closed') rec.connected = false;
+    var trec = touchTracker(d.trackerUrl, d.infoHash);
+    if (trec) {
+      trec.peersSeen += 1;
+      trec.lastEventAt = now();
+      if (trec.status === 'idle' || trec.status === 'peer-seen') { trec.status = 'peer-seen'; trec.lastEvent = 'peer-seen'; }
+    }
+    log('peer:' + event, { peerId: id, trackerUrl: d.trackerUrl, infoHash: d.infoHash, detail: note ? String(note) : undefined });
+    draw();
+  }
+  function noteTracker(d, event, note) {
+    var url = d && d.trackerUrl;
+    if (!url) return;
+    var rec = touchTracker(url, d.infoHash);
+    rec.status = event;
+    rec.lastEvent = event;
+    rec.lastEventAt = now();
+    log('tracker:' + event, { trackerUrl: url, infoHash: d.infoHash, detail: note ? String(note) : undefined });
+    draw();
+  }
+  function wireCoreEvents() {
+    var engine = hlsInstance && hlsInstance.p2pEngine;
+    if (!engine) { log('ERROR: p2pEngine unavailable on this hls instance'); return; }
+    function on(name, fn) { try { engine.addEventListener(name, fn); } catch (e) { log('subscribe-error:' + name, String(e)); } }
+
+    on('onStreamAdded', function (d) {
+      var s = d && d.stream;
+      if (!s) return;
+      R.verdict.streamIdentityObserved = true;
+      R.swarm.resolvedSwarmId = s.swarmId;
+      R.swarm.streams.push({ type: s.type, properties: s.properties, identityHash: s.identityHash, streamSwarmId: s.streamSwarmId, infoHash: s.infoHash });
+      if (matchesControlled(s.properties)) {
+        R.verdict.controlledVariantFound = true;
+        R.selectedVariant.found = true;
+        R.swarm.controlledInfoHash = s.infoHash;
+      }
+      log('stream-added', { type: s.type, properties: s.properties, swarmId: s.swarmId, streamSwarmId: s.streamSwarmId, infoHash: s.infoHash });
+      draw();
+    });
+    on('onStreamRegistrationError', function (d) { log('stream-registration-error', d); draw(); });
+
+    on('onPeerConnect', function (d) { notePeer(d, 'connected'); });
+    on('onPeerClose', function (d) { notePeer(d, 'closed'); });
+    on('onPeerError', function (d) { notePeer(d, 'error', d && d.error); });
+    on('onPeerWarning', function (d) { notePeer(d, 'warning', d && d.warning); });
+    on('onPeerConnectError', function (d) { notePeer(d, 'connect-error', d && d.error); });
+
+    on('onTrackerError', function (d) { noteTracker(d, 'error', d && d.error); });
+    on('onTrackerWarning', function (d) { noteTracker(d, 'warning', d && d.warning); });
+
+    on('onChunkDownloaded', function (bytesLength, downloadSource, peerId, streamType, infoHash) {
+      var n = Number(bytesLength) || 0;
+      if (downloadSource === 'p2p') { R.transfer.bytes.p2pDown += n; R.verdict.p2pChunkBytesReceived = true; }
+      else if (downloadSource === 'http') { R.transfer.bytes.http += n; }
+      log('chunk-downloaded', { bytesLength: n, downloadSource: downloadSource, peerId: peerId, streamType: streamType, infoHash: infoHash });
+      draw();
+    });
+    on('onChunkUploaded', function (bytesLength, peerId, streamType, infoHash) {
+      R.transfer.bytes.p2pUp += Number(bytesLength) || 0;
+      log('chunk-uploaded', { bytesLength: bytesLength, peerId: peerId, streamType: streamType, infoHash: infoHash });
+      draw();
+    });
+
+    on('onSegmentLoaded', function (d) {
+      var seg = (d && d.segment) || {};
+      var matches = !!(R.swarm.controlledInfoHash && d.infoHash === R.swarm.controlledInfoHash);
+      var rec = { time: now(), externalId: seg.externalId, url: seg.url, downloadSource: d.downloadSource, peerId: d.peerId || null, infoHash: d.infoHash, bytesLength: d.bytesLength, matchesControlled: matches };
+      cap(R.transfer.segments, rec, 500);
+      if (d.downloadSource === 'p2p') {
+        R.verdict.p2pSegmentLoaded = true;
+        if (matches) R.verdict.p2pSegmentMatchedSelectedVariant = true;
+      }
+      log('segment-loaded', rec);
+      draw();
+    });
+  }
+
+  // ---- config builder — this is the actual v5 fix -----------------------------
+  function buildP2PConfig() {
+    var mode = modeValue();
+    var core = {};
+    if (mode === 'custom') {
+      var v = customIdInput.value.trim();
+      if (!v) {
+        log('ERROR: Custom mode selected but the swarm ID field is empty — refusing to start. (This is exactly the empty-string trap v6 exists to avoid.)');
+        return null;
+      }
+      core.swarmId = v;
+    }
+    // Natural mode: the `swarmId` key is not set on `core` at all — not '', not undefined
+    // as a value, just absent — so p2p-media-loader's `config.swarmId ?? manifestResponseUrl`
+    // fallback engages and the swarm ID becomes the manifest's resolved response URL.
+    return { mode: mode, core: core };
+  }
+
+  // ---- start/reset -------------------------------------------------------------
+  var hlsInstance = null, statsTimerHandle = null, startTime = 0;
+
+  function resetState() {
+    R.identity.runId = uuid();
+    R.test.startedAt = now();
+    R.test.elapsedMs = 0;
+    R.manifest = { url: uInput.value.trim(), loaded: false, renditions: [], activeLevelIndex: null };
+    R.selectedVariant = { found: false, levelIndex: null };
+    R.swarm = { resolvedSwarmId: null, controlledInfoHash: null, streams: [] };
+    R.trackers = {};
+    R.peers = {};
+    R.transfer = { bytes: { http: 0, p2pDown: 0, p2pUp: 0 }, segments: [] };
+    R.webrtc = { peerConnections: [], ice: { host: 0, srflx: 0, relay: 0, other: 0 } };
+    R.verdict = { streamIdentityObserved: false, controlledVariantFound: false, peerConnected: false, p2pChunkBytesReceived: false, p2pSegmentLoaded: false, p2pSegmentMatchedSelectedVariant: false, proof: false };
+    R.events = [];
+    logEl.textContent = '';
+    if (window.__HS_V6_PEER_CONNECTIONS) window.__HS_V6_PEER_CONNECTIONS.length = 0;
+  }
+
+  function start() {
+    var cfg = buildP2PConfig();
+    if (!cfg) return;
+    if (hlsInstance) { try { hlsInstance.destroy(); } catch (e) {} }
+    resetState();
+    startTime = Date.now();
+    R.configuration = {
+      streamUrl: uInput.value.trim(),
+      swarmMode: cfg.mode,
+      customSwarmId: cfg.mode === 'custom' ? cfg.core.swarmId : null,
+      variantMode: variantSelect.value,
+      targetVariant: CONTROLLED
+    };
+    log('start', R.configuration);
+
+    var HlsWithP2P = p2pml.hlsjs.HlsJsP2PEngine.injectMixin(Hls);
+    hlsInstance = new HlsWithP2P({
+      p2p: {
+        core: cfg.core,
+        onHlsJsCreated: function (h) { hlsInstance = h; wireCoreEvents(); }
+      }
+    });
+
+    hlsInstance.on(Hls.Events.MANIFEST_PARSED, function (_evt, data) {
+      R.manifest.loaded = true;
+      var levels = data.levels || [];
+      R.manifest.renditions = levels.map(function (lv) {
+        var codecs = (lv.attrs && lv.attrs.CODECS) || lv.codecSet || lv.videoCodec || '';
+        return { width: lv.width, height: lv.height, bitrate: lv.bitrate, codecs: codecs };
+      });
+      if (variantSelect.value === '480') {
+        var idx = levels.findIndex(function (lv) { return matchesControlled({ width: lv.width, height: lv.height, bitrate: lv.bitrate }); });
+        R.selectedVariant = { found: idx >= 0, levelIndex: idx };
+        if (idx >= 0) {
+          R.verdict.controlledVariantFound = true;
+          hlsInstance.currentLevel = idx;
+          log('controlled-variant-selected', { levelIndex: idx });
+        } else {
+          log('controlled-variant-not-found', { target: CONTROLLED });
+        }
+      } else {
+        log('auto-variant-mode', { note: 'selectedVariant.found only becomes true if/when ABR happens to land exactly on the 848x480/836280 rendition — known limitation, carried over from v5, not fixed here' });
+      }
+      draw();
+    });
+
+    hlsInstance.on(Hls.Events.LEVEL_SWITCHED, function (_evt, data) {
+      R.manifest.activeLevelIndex = data.level;
+      draw();
+    });
+
+    hlsInstance.on(Hls.Events.ERROR, function (_evt, data) {
+      log('hls-error', { type: data.type, details: data.details, fatal: data.fatal });
+    });
+
+    hlsInstance.attachMedia(videoEl);
+    hlsInstance.loadSource(uInput.value.trim());
+
+    clearInterval(statsTimerHandle);
+    statsTimerHandle = setInterval(function () { pollStats(); draw(); }, 1000);
+    draw();
+  }
+
+  // ---- rendering -----------------------------------------------------------
+  function row(k, v) { return '<div class="row"><span class="k">' + esc(k) + '</span><span class="v">' + v + '</span></div>'; }
+
+  function renderManifest() {
+    var html = row('URL', esc(R.manifest.url) || '—') + row('Loaded', R.manifest.loaded ? '<span class="pill ok">yes</span>' : '<span class="pill idle">pending</span>');
+    if (R.manifest.renditions.length) {
+      html += '<table><thead><tr><th>#</th><th>res</th><th>kbps</th><th>codecs</th><th>active</th></tr></thead><tbody>';
+      R.manifest.renditions.forEach(function (r, i) {
+        var isActive = R.manifest.activeLevelIndex === i || (R.manifest.activeLevelIndex === null && R.selectedVariant.levelIndex === i);
+        html += '<tr><td>' + i + '</td><td>' + r.width + '\u00D7' + r.height + '</td><td>' + Math.round((r.bitrate || 0) / 1000) + '</td><td>' + esc(r.codecs) + '</td><td>' + (isActive ? '\u25CF' : '') + '</td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+    panels.manifest.innerHTML = html;
+  }
+
+  function renderSwarm() {
+    var html = row('Mode', R.configuration.swarmMode === 'natural' ? '<span class="pill ok">natural</span>' : '<span class="pill warn">custom</span>');
+    html += row('Resolved swarmId', esc(R.swarm.resolvedSwarmId || '(not yet reported)'));
+    if (R.configuration.swarmMode === 'natural' && R.swarm.resolvedSwarmId) {
+      var matchesManifest = R.swarm.resolvedSwarmId.split('?')[0] === R.manifest.url.split('?')[0];
+      html += row('Matches manifest URL', matchesManifest ? '<span class="pill ok">yes — natural derivation confirmed</span>' : '<span class="pill err">no — unexpected</span>');
+    }
+    if (R.swarm.streams.length) {
+      html += '<table><thead><tr><th>rendition</th><th>identityHash</th><th>infoHash</th></tr></thead><tbody>';
+      R.swarm.streams.forEach(function (s) {
+        var p = s.properties || {};
+        var star = s.infoHash === R.swarm.controlledInfoHash ? ' \u2605' : '';
+        html += '<tr><td>' + (p.width || '?') + '\u00D7' + (p.height || '?') + star + '</td><td>' + esc((s.identityHash || '').slice(0, 14)) + '\u2026</td><td>' + esc(s.infoHash || '') + '</td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+    panels.swarm.innerHTML = html;
+  }
+
+  function renderTrackers() {
+    var urls = Object.keys(R.trackers);
+    if (!urls.length) { panels.trackers.innerHTML = 'No tracker activity yet.'; return; }
+    var html = '<table><thead><tr><th>tracker</th><th>status</th><th>peers</th><th>last event</th></tr></thead><tbody>';
+    urls.forEach(function (u) {
+      var t = R.trackers[u];
+      var cls = t.status === 'error' ? 'err' : (t.status === 'warning' ? 'warn' : (t.status === 'peer-seen' ? 'ok' : 'idle'));
+      html += '<tr><td>' + esc(u.replace(/^wss?:\/\//, '')) + '</td><td><span class="pill ' + cls + '">' + esc(t.status) + '</span></td><td>' + t.peersSeen + '</td><td>' + esc((t.lastEventAt || '').slice(11, 19)) + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    panels.trackers.innerHTML = html;
+  }
+
+  function renderPeers() {
+    var ids = Object.keys(R.peers);
+    var connectedCount = ids.filter(function (id) { return R.peers[id].connected; }).length;
+    var html = row('Discovered', String(ids.length)) + row('Currently connected', String(connectedCount));
+    if (ids.length) {
+      html += '<table><thead><tr><th>peer</th><th>tracker</th><th>state</th></tr></thead><tbody>';
+      ids.forEach(function (id) {
+        var p = R.peers[id];
+        var cls = p.connected ? 'ok' : ((p.lastEvent === 'error' || p.lastEvent === 'connect-error') ? 'err' : 'idle');
+        html += '<tr><td>' + esc(id) + '</td><td>' + esc((p.trackerUrl || '').replace(/^wss?:\/\//, '')) + '</td><td><span class="pill ' + cls + '">' + esc(p.lastEvent || 'seen') + '</span></td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+    panels.peers.innerHTML = html;
+  }
+
+  function renderTransfer() {
+    var b = R.transfer.bytes;
+    panels.transferSummary.innerHTML =
+      row('HTTP downloaded', fmtBytes(b.http)) +
+      row('P2P downloaded', fmtBytes(b.p2pDown)) +
+      row('P2P uploaded (seeded)', fmtBytes(b.p2pUp));
+    var tbody = panels.transferTable;
+    tbody.innerHTML = '';
+    R.transfer.segments.slice(-40).slice().reverse().forEach(function (s) {
+      var tr = document.createElement('tr');
+      var cls = s.downloadSource === 'p2p' ? 'ok' : 'idle';
+      tr.innerHTML = '<td>' + esc((s.time || '').slice(11, 19)) + '</td><td>' + (s.externalId === undefined || s.externalId === null ? '' : s.externalId) + '</td><td><span class="pill ' + cls + '">' + esc(s.downloadSource) + '</span></td><td>' + esc(s.peerId || '') + '</td><td>' + fmtBytes(s.bytesLength) + '</td><td>' + (s.matchesControlled ? '\u2605' : '') + '</td>';
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderProof() {
+    var segs = R.transfer.segments;
+    var hit = null;
+    for (var i = segs.length - 1; i >= 0; i--) {
+      if (segs[i].downloadSource === 'p2p' && segs[i].peerId && segs[i].bytesLength > 0) { hit = segs[i]; break; }
+    }
+    if (hit) {
+      panels.proofPanel.classList.add('hit');
+      panels.proof.innerHTML =
+        row('Segment', String(hit.externalId)) +
+        row('Peer', esc(hit.peerId)) +
+        row('infoHash', esc(hit.infoHash)) +
+        row('Bytes', fmtBytes(hit.bytesLength)) +
+        row('Matches controlled 480p rendition', hit.matchesControlled ? '<span class="pill ok">yes</span>' : '<span class="pill warn">no — a different rendition</span>') +
+        row('Time', esc(hit.time));
+    } else {
+      panels.proofPanel.classList.remove('hit');
+      panels.proof.innerHTML = 'No P2P segment received yet — peer discovery and a WebRTC connection alone don\u2019t count as proof.';
+    }
+  }
+
+  function draw() {
+    R.test.elapsedMs = startTime ? Date.now() - startTime : 0;
+    R.verdict.proof = R.verdict.p2pSegmentLoaded && R.selectedVariant.found;
+    renderManifest();
+    renderSwarm();
+    renderTrackers();
+    renderPeers();
+    renderTransfer();
+    renderProof();
+    jsonEl.value = JSON.stringify(R, null, 2);
+  }
+
+  // ---- wire up -----------------------------------------------------------------
+  goBtn.addEventListener('click', start);
+  copyBtn.addEventListener('click', function () {
+    draw();
+    jsonEl.focus();
+    jsonEl.select();
+    try { navigator.clipboard.writeText(jsonEl.value); log('json-copied', { characters: jsonEl.value.length }); }
+    catch (e) { log('json-copy-failed', String(e)); }
+  });
+
+  draw();
+})();
+</script>
+</body>
+</html>
