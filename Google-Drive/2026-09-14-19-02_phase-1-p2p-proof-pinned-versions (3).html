@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>HiveStream Phase 1 — P2P Proof</title>
+
+  <!--
+    PHASE 1 PURPOSE
+    ===============
+    This page is intentionally small and disposable.
+
+    It is NOT the HiveStream application.
+    It is a measurement instrument whose only job is to answer:
+
+      "Can two real browsers watching the same HLS stream exchange
+       actual media segments over WebRTC?"
+
+    We deliberately use the Novage P2P Media Loader Hls.js integration,
+    pinned to an exact version (hls.js 1.7.3, p2p-media-loader-hlsjs 4.0.0 --
+    see the pinned <script> tags and LIBRARY_VERSIONS below), instead of
+    inventing a HiveStream transport layer.
+
+    The page reports:
+      - peer connections
+      - HTTP bytes
+      - P2P bytes received
+      - P2P bytes uploaded
+      - segment load source
+      - segment IDs
+      - playback state
+      - the configured swarm ID
+
+    Open this page in TWO browser instances/devices with the SAME
+    stream URL and SAME swarm ID.
+  -->
+
+  <!--
+    Pinned exact versions (see HIVESTREAM-P2P-ARCHITECTURE-RESEARCH-CHECKPOINT-2026-09-13.md
+    Section 17: stop using @latest / floating ranges. p2p-media-loader-hlsjs v2.3.0 made a
+    breaking change to stream identity (infoHash) derivation -- peers on different resolved
+    versions of a floating range can silently fail to find each other in the same swarm even
+    with an identical configured swarmId. Every result now logs these exact pinned versions
+    (see LIBRARY_VERSIONS below) so two test runs can be reliably compared.
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/p2p-media-loader-hlsjs@4.0.0/dist/p2p-media-loader-hlsjs.iife.min.js"></script>
+
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: system-ui, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 16px;
+      background: #111;
+      color: #eee;
+    }
+
+    main {
+      max-width: 900px;
+      margin: auto;
+    }
+
+    h1 { margin-top: 0; }
+
+    label {
+      display: block;
+      margin-top: 12px;
+      font-weight: 700;
+    }
+
+    input, button {
+      box-sizing: border-box;
+      width: 100%;
+      margin-top: 6px;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #555;
+      background: #1c1c1c;
+      color: #eee;
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    video {
+      width: 100%;
+      max-height: 60vh;
+      margin-top: 16px;
+      background: #000;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      background: #080808;
+      border: 1px solid #333;
+      padding: 12px;
+      border-radius: 6px;
+      line-height: 1.35;
+    }
+
+    .ok { color: #8f8; }
+    .warn { color: #ffcc66; }
+    .bad { color: #ff7777; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>HiveStream Phase 1 — P2P Proof</h1>
+
+  <p>
+    Run the same page in two browsers. Keep the <strong>same swarm ID</strong>
+    and <strong>same HLS URL</strong> on both. Start Browser A first, then
+    Browser B. Watch the counters rather than assuming that a connected peer
+    means media bytes actually moved.
+  </p>
+
+  <label for="streamUrl">HLS stream URL</label>
+  <input id="streamUrl" type="url" spellcheck="false">
+
+  <label for="swarmId">Swarm ID</label>
+  <input id="swarmId" type="text" spellcheck="false">
+
+  <button id="startButton">Start P2P Player</button>
+  <button id="copyButton">Copy JSON Results</button>
+
+  <video id="video" controls playsinline></video>
+
+  <h2>Status</h2>
+  <pre id="status">Not started.</pre>
+
+  <h2>Event Log</h2>
+  <pre id="log"></pre>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------------------------------------------------------------
+     Configuration
+     --------------------------------------------------------------- */
+
+  // This Mux test stream is widely used by the P2P Media Loader project
+  // for integration testing. It is HLS and provides a convenient public
+  // starting point for Phase 1. The URL can be replaced with another
+  // CORS-enabled HLS VOD/live stream through the query string or UI.
+  var DEFAULT_STREAM = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8";
+
+  // The swarm ID MUST be identical in both browsers for this experiment.
+  // A fixed explicit ID makes the test easier to reason about than relying
+  // on an automatically derived value.
+  var DEFAULT_SWARM = "hivestream-phase1-proof-v1";
+
+  var video = document.getElementById("video");
+  var streamInput = document.getElementById("streamUrl");
+  var swarmInput = document.getElementById("swarmId");
+  var startButton = document.getElementById("startButton");
+  var copyButton = document.getElementById("copyButton");
+  var statusEl = document.getElementById("status");
+  var logEl = document.getElementById("log");
+
+  // Must match the pinned CDN versions in the <script> tags above exactly.
+  // Recorded in every result so two test runs can be reliably compared
+  // (see HIVESTREAM-P2P-ARCHITECTURE-RESEARCH-CHECKPOINT-2026-09-13.md Section 17).
+  var LIBRARY_VERSIONS = {
+    hlsJsPinned: "1.7.3",
+    p2pMediaLoaderHlsjsPinned: "4.0.0"
+  };
+
+  var hls = null;
+  var p2pEngine = null;
+  var startedAt = null;
+
+  /* ---------------------------------------------------------------
+     Measurement state
+     ---------------------------------------------------------------
+
+     IMPORTANT:
+     We count bytes from the P2P Media Loader events themselves.
+     Browser network totals are not sufficient because they cannot
+     reliably distinguish HTTP segment traffic from WebRTC segment
+     traffic.
+  */
+
+  var result = {
+    test: {
+      name: "HiveStream Phase 1 — P2P Proof",
+      version: 1,
+      startedAt: null,
+      elapsedMs: 0
+    },
+
+    environment: {
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      location: window.location.href,
+      hlsSupported: false,
+      webRtcSupported: typeof RTCPeerConnection !== "undefined"
+    },
+
+    configuration: {
+      streamUrl: "",
+      swarmId: ""
+    },
+
+    // Added per HIVESTREAM-P2P-ARCHITECTURE-RESEARCH-CHECKPOINT-2026-09-13.md
+    // Section 17 (reproducibility requirement) and the 2026-09-14 testing
+    // session's @latest version-drift finding. streamIdentity is captured
+    // best-effort from the engine (the exact v4 API surface for reading
+    // this back was not independently confirmed at the time this was
+    // written -- if capture fails, the fields stay null rather than the
+    // test breaking).
+    dependencies: {
+      hlsJsPinned: LIBRARY_VERSIONS.hlsJsPinned,
+      p2pMediaLoaderHlsjsPinned: LIBRARY_VERSIONS.p2pMediaLoaderHlsjsPinned
+    },
+
+    streamIdentity: {
+      captured: false,
+      streamSwarmId: null,
+      infoHash: null,
+      identityHash: null,
+      captureError: null
+    },
+
+    peers: {
+      connected: 0,
+      closed: 0,
+      current: [],
+      events: []
+    },
+
+    bytes: {
+      httpDownloaded: 0,
+      p2pDownloaded: 0,
+      p2pUploaded: 0,
+      otherDownloaded: 0,
+      downloadEvents: 0,
+      uploadEvents: 0
+    },
+
+    segments: {
+      loaded: 0,
+      http: 0,
+      p2p: 0,
+      unknownSource: 0,
+      ids: [],
+      recent: []
+    },
+
+    playback: {
+      state: "idle",
+      currentTime: 0,
+      duration: 0,
+      paused: true,
+      ended: false,
+      error: null
+    },
+
+    verdict: {
+      peerConnected: false,
+      p2pBytesReceived: false,
+      p2pBytesUploaded: false,
+      p2pSegmentLoaded: false,
+      proof: false
+    }
+  };
+
+  function nowIso() {
+    return new Date().toISOString();
+  }
+
+  function addLog(message, data) {
+    var line = "[" + nowIso() + "] " + message;
+    if (data !== undefined) {
+      try {
+        line += " " + JSON.stringify(data);
+      } catch (_) {
+        line += " [unserializable]";
+      }
+    }
+
+    logEl.textContent += line + "\n";
+    // Keep the visible log useful on mobile.
+    var lines = logEl.textContent.split("\n");
+    if (lines.length > 250) {
+      logEl.textContent = lines.slice(lines.length - 250).join("\n");
+    }
+  }
+
+  function safeNumber(value) {
+    return typeof value === "number" && isFinite(value) ? value : 0;
+  }
+
+  function addUnique(array, value, limit) {
+    if (value === undefined || value === null) return;
+    if (array.indexOf(value) !== -1) return;
+    array.push(value);
+    if (array.length > limit) array.shift();
+  }
+
+  function sourceName(source) {
+    if (source === undefined || source === null) return "unknown";
+    return String(source).toLowerCase();
+  }
+
+  function isP2PSource(source) {
+    var s = sourceName(source);
+    return s.indexOf("p2p") !== -1 ||
+           s.indexOf("peer") !== -1 ||
+           s.indexOf("webrtc") !== -1;
+  }
+
+  function isHttpSource(source) {
+    var s = sourceName(source);
+    return s.indexOf("http") !== -1 ||
+           s.indexOf("cdn") !== -1 ||
+           s.indexOf("server") !== -1;
+  }
+
+  function updateVerdict() {
+    result.verdict.peerConnected = result.peers.connected > 0;
+    result.verdict.p2pBytesReceived = result.bytes.p2pDownloaded > 0;
+    result.verdict.p2pBytesUploaded = result.bytes.p2pUploaded > 0;
+    result.verdict.p2pSegmentLoaded = result.segments.p2p > 0;
+
+    // The strongest Phase 1 proof is an actual segment loaded from P2P.
+    // A P2P byte counter > 0 is also direct evidence of segment traffic.
+    result.verdict.proof =
+      result.verdict.p2pSegmentLoaded ||
+      result.verdict.p2pBytesReceived > 0;
+  }
+
+  function renderStatus() {
+    if (startedAt) {
+      result.test.elapsedMs = Date.now() - startedAt;
+    }
+
+    result.playback.currentTime = safeNumber(video.currentTime);
+    result.playback.duration = safeNumber(video.duration);
+    result.playback.paused = !!video.paused;
+
+    updateVerdict();
+
+    var totalDownloaded =
+      result.bytes.httpDownloaded +
+      result.bytes.p2pDownloaded +
+      result.bytes.otherDownloaded;
+
+    var p2pRatio = totalDownloaded > 0
+      ? (result.bytes.p2pDownloaded / totalDownloaded) * 100
+      : 0;
+
+    var verdictText = result.verdict.proof
+      ? "PROOF: P2P MEDIA BYTES OBSERVED"
+      : result.verdict.peerConnected
+        ? "PEER CONNECTED — WAITING FOR P2P MEDIA BYTES"
+        : "WAITING FOR PEER CONNECTION";
+
+    statusEl.textContent =
+      verdictText + "\n\n" +
+      "Peers connected:       " + result.peers.connected + "\n" +
+      "Peers currently known: " + result.peers.current.length + "\n" +
+      "HTTP downloaded:       " + result.bytes.httpDownloaded + " bytes\n" +
+      "P2P downloaded:        " + result.bytes.p2pDownloaded + " bytes\n" +
+      "P2P uploaded:          " + result.bytes.p2pUploaded + " bytes\n" +
+      "P2P download ratio:    " + p2pRatio.toFixed(2) + "%\n" +
+      "Segments loaded:       " + result.segments.loaded + "\n" +
+      "Segments via HTTP:     " + result.segments.http + "\n" +
+      "Segments via P2P:      " + result.segments.p2p + "\n" +
+      "Playback state:        " + result.playback.state + "\n" +
+      "Current time:          " + result.playback.currentTime.toFixed(2) + "s\n" +
+      "Duration:              " + result.playback.duration.toFixed(2) + "s\n" +
+      "Swarm ID:              " + result.configuration.swarmId;
+  }
+
+  function bindVideoEvents() {
+    [
+      ["loadstart", "loadstart"],
+      ["loadedmetadata", "loadedmetadata"],
+      ["canplay", "canplay"],
+      ["playing", "playing"],
+      ["pause", "pause"],
+      ["waiting", "waiting"],
+      ["stalled", "stalled"],
+      ["ended", "ended"],
+      ["error", "error"]
+    ].forEach(function (entry) {
+      video.addEventListener(entry[0], function () {
+        result.playback.state = entry[1];
+        result.playback.error = video.error
+          ? {
+              code: video.error.code,
+              message: video.error.message || null
+            }
+          : null;
+        addLog("VIDEO " + entry[1], result.playback.error || undefined);
+        renderStatus();
+      });
+    });
+  }
+
+  // Best-effort capture of the engine's stream/swarm identity.
+  // The exact v4 API surface for reading this back from HlsJsP2PEngine was
+  // not independently confirmed when this was written -- this tries a few
+  // plausible spots (documented Core-level fields per the v4 docs, and an
+  // engine.getDetails() call referenced in older npm docs) and records
+  // whichever, if any, actually returns something, without ever throwing.
+  function captureStreamIdentity() {
+    if (!p2pEngine || result.streamIdentity.captured) return;
+    try {
+      var details = null;
+      if (typeof p2pEngine.getDetails === "function") {
+        details = p2pEngine.getDetails();
+      }
+      var streams = null;
+      if (typeof p2pEngine.getStreams === "function") {
+        streams = p2pEngine.getStreams();
+      } else if (p2pEngine.core && typeof p2pEngine.core.getStreams === "function") {
+        streams = p2pEngine.core.getStreams();
+      }
+      var stream = null;
+      if (streams) {
+        if (Array.isArray(streams) && streams.length > 0) {
+          stream = streams[0];
+        } else if (streams instanceof Map && streams.size > 0) {
+          stream = streams.values().next().value;
+        }
+      }
+      if (stream) {
+        result.streamIdentity.captured = true;
+        result.streamIdentity.streamSwarmId = stream.streamSwarmId || null;
+        result.streamIdentity.infoHash = stream.infoHash || null;
+        result.streamIdentity.identityHash = stream.identityHash || null;
+        addLog("STREAM IDENTITY CAPTURED", result.streamIdentity);
+      } else if (details) {
+        result.streamIdentity.captured = true;
+        result.streamIdentity.captureError = "getStreams() unavailable; recorded engine.getDetails() instead, see log";
+        addLog("ENGINE DETAILS (fallback, no getStreams())", details);
+      } else {
+        result.streamIdentity.captureError = "No getStreams()/getDetails() found on p2pEngine at capture time";
+      }
+    } catch (e) {
+      result.streamIdentity.captureError = String(e && e.message ? e.message : e);
+    }
+    renderStatus();
+  }
+
+  function bindP2PEvents() {
+    if (!p2pEngine) return;
+
+    /*
+      Peer lifecycle.
+      These prove that WebRTC peer discovery/signaling reached the browser,
+      but peer connection alone is NOT considered proof of media transfer.
+    */
+    p2pEngine.addEventListener("onPeerConnect", function (details) {
+      result.peers.connected++;
+      var peerId = details && details.peerId ? details.peerId : "unknown";
+      addUnique(result.peers.current, peerId, 100);
+      result.peers.events.push({
+        time: nowIso(),
+        type: "connect",
+        peerId: peerId
+      });
+      addLog("P2P PEER CONNECTED", details);
+      renderStatus();
+    });
+
+    p2pEngine.addEventListener("onPeerClose", function (details) {
+      result.peers.closed++;
+      var peerId = details && details.peerId ? details.peerId : "unknown";
+      result.peers.current = result.peers.current.filter(function (id) {
+        return id !== peerId;
+      });
+      result.peers.events.push({
+        time: nowIso(),
+        type: "close",
+        peerId: peerId
+      });
+      addLog("P2P PEER CLOSED", details);
+      renderStatus();
+    });
+
+    p2pEngine.addEventListener("onPeerError", function (details) {
+      addLog("P2P PEER ERROR", details);
+    });
+
+    p2pEngine.addEventListener("onPeerWarning", function (details) {
+      addLog("P2P PEER WARNING", details);
+    });
+
+    p2pEngine.addEventListener("onPeerConnectError", function (details) {
+      addLog("P2P PEER CONNECT ERROR", details);
+    });
+
+    /*
+      This is the most important byte-level measurement.
+
+      P2P Media Loader documents onChunkDownloaded as reporting the number
+      of bytes and the download source. We classify that source here rather
+      than inferring P2P from browser network activity.
+    */
+    p2pEngine.addEventListener("onChunkDownloaded", function (bytesLength, downloadSource, peerId) {
+      var bytes = safeNumber(bytesLength);
+      var source = sourceName(downloadSource);
+
+      result.bytes.downloadEvents++;
+
+      if (isP2PSource(source)) {
+        result.bytes.p2pDownloaded += bytes;
+      } else if (isHttpSource(source)) {
+        result.bytes.httpDownloaded += bytes;
+      } else {
+        result.bytes.otherDownloaded += bytes;
+      }
+
+      addLog("CHUNK DOWNLOADED", {
+        bytes: bytes,
+        source: downloadSource,
+        peerId: peerId || null
+      });
+      renderStatus();
+    });
+
+    /*
+      Upload measurement is equally important. It demonstrates that the
+      browser is not merely a consumer: it is actually serving media bytes
+      to another browser.
+    */
+    p2pEngine.addEventListener("onChunkUploaded", function (bytesLength, peerId) {
+      var bytes = safeNumber(bytesLength);
+      result.bytes.uploadEvents++;
+      result.bytes.p2pUploaded += bytes;
+
+      addLog("CHUNK UPLOADED TO PEER", {
+        bytes: bytes,
+        peerId: peerId || null
+      });
+      renderStatus();
+    });
+
+    /*
+      Segment-level evidence.
+      The exact detail object is retained in a compact form so the copied
+      result remains useful without becoming enormous.
+    */
+    p2pEngine.addEventListener("onSegmentLoaded", function (details) {
+      captureStreamIdentity(); // no-op if already captured; retried here since
+                                // stream identity resolves at registration,
+                                // which may happen after engine creation.
+      var source = details && (
+        details.downloadSource ||
+        details.source ||
+        details.type
+      );
+
+      var segmentId = details && (
+        details.segmentId !== undefined ? details.segmentId :
+        details.id !== undefined ? details.id :
+        details.segment && details.segment.externalId
+      );
+
+      result.segments.loaded++;
+
+      if (isP2PSource(source)) {
+        result.segments.p2p++;
+      } else if (isHttpSource(source)) {
+        result.segments.http++;
+      } else {
+        result.segments.unknownSource++;
+      }
+
+      addUnique(result.segments.ids, segmentId, 500);
+      result.segments.recent.push({
+        time: nowIso(),
+        id: segmentId,
+        source: source || "unknown"
+      });
+      if (result.segments.recent.length > 50) {
+        result.segments.recent.shift();
+      }
+
+      addLog("SEGMENT LOADED", details);
+      renderStatus();
+    });
+
+    p2pEngine.addEventListener("onSegmentError", function (details) {
+      addLog("SEGMENT ERROR", details);
+    });
+  }
+
+  function start() {
+    if (hls) {
+      try { hls.destroy(); } catch (_) {}
+      hls = null;
+    }
+
+    if (!window.Hls || !window.p2pml || !window.p2pml.hlsjs) {
+      addLog("Required libraries are missing.");
+      return;
+    }
+
+    var streamUrl = streamInput.value.trim();
+    var swarmId = swarmInput.value.trim();
+
+    if (!streamUrl || !swarmId) {
+      addLog("Stream URL and swarm ID are required.");
+      return;
+    }
+
+    result.configuration.streamUrl = streamUrl;
+    result.configuration.swarmId = swarmId;
+    result.test.startedAt = nowIso();
+    startedAt = Date.now();
+
+    result.environment.hlsSupported = window.Hls.isSupported();
+
+    if (!window.Hls.isSupported()) {
+      result.playback.state = "HLS_NOT_SUPPORTED";
+      addLog("Hls.js is not supported in this browser.");
+      renderStatus();
+      return;
+    }
+
+    var HlsJsP2PEngine = window.p2pml.hlsjs.HlsJsP2PEngine;
+    var HlsWithP2P = HlsJsP2PEngine.injectMixin(window.Hls);
+
+    hls = new HlsWithP2P({
+      p2p: {
+        core: {
+          // Explicit swarm ID ensures both browsers join the same swarm.
+          swarmId: swarmId
+        },
+
+        // The integration exposes the underlying P2P engine here.
+        onHlsJsCreated: function (createdHls) {
+          p2pEngine = createdHls.p2pEngine;
+          bindP2PEvents();
+          captureStreamIdentity();
+          addLog("P2P ENGINE CREATED");
+          renderStatus();
+        }
+      }
+    });
+
+    hls.attachMedia(video);
+    hls.loadSource(streamUrl);
+
+    hls.on(window.Hls.Events.ERROR, function (_, data) {
+      addLog("HLS ERROR", data);
+    });
+
+    addLog("STARTED", {
+      streamUrl: streamUrl,
+      swarmId: swarmId
+    });
+
+    renderStatus();
+  }
+
+  function loadQueryDefaults() {
+    var params = new URLSearchParams(window.location.search);
+    streamInput.value = params.get("stream") || DEFAULT_STREAM;
+    swarmInput.value = params.get("swarm") || DEFAULT_SWARM;
+  }
+
+  function copyResults() {
+    renderStatus();
+    var json = JSON.stringify(result, null, 2);
+
+    // Synchronous copy() is intentional for mobile DevTools workflows.
+    // When the page is run from a browser console that exposes copy(), this
+    // avoids the common async Clipboard API failure on mobile.
+    if (typeof window.copy === "function") {
+      window.copy(json);
+      addLog("RESULT JSON COPIED VIA window.copy()");
+      return;
+    }
+
+    // Normal page fallback: select a temporary textarea and use the legacy
+    // synchronous clipboard API when available.
+    var textarea = document.createElement("textarea");
+    textarea.value = json;
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    try {
+      document.execCommand("copy");
+      addLog("RESULT JSON COPIED");
+    } catch (error) {
+      addLog("COPY FAILED — select the result from DevTools instead", {
+        message: error && error.message
+      });
+    }
+
+    textarea.remove();
+  }
+
+  loadQueryDefaults();
+  bindVideoEvents();
+  startButton.addEventListener("click", start);
+  copyButton.addEventListener("click", copyResults);
+
+  setInterval(renderStatus, 1000);
+  renderStatus();
+})();
+</script>
+</body>
+</html>
